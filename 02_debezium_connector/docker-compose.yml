@@ -1,0 +1,12 @@
+version: "3.8"
+services:
+  debezium:
+    image: quay.io/debezium/connect:2.7
+    ports:
+      - "8083:8083"
+    environment:
+      BOOTSTRAP_SERVERS: ${KAFKA_BROKER_IP}:${KAFKA_PORT}
+      GROUP_ID: 1
+      CONFIG_STORAGE_TOPIC: my_connect_configs
+      OFFSET_STORAGE_TOPIC: my_connect_offsets
+      STATUS_STORAGE_TOPIC: my_connect_statuses
