@@ -10,9 +10,8 @@
     "database.user": "${env:DB_USER}",
     "database.password": "${env:DB_PASS}",
     "database.dbname": "${env:DB_NAME}",
-    "database.topic.prefix": "cdc",
+    "topic.prefix": "cdc",
     
-    "table.include.list": "public.*",
-    "schema.history.internal.kafka.bootstrap.servers": "${env:KAFKA_SERVER}"
+    "table.include.list": "public.*"
   }
 }

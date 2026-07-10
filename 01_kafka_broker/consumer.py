@@ -2,7 +2,7 @@ import json
 from confluent_kafka import Consumer, KafkaError
 
 conf = {
-    'bootstrap.servers': 'localhost:29092', 
+    'bootstrap.servers': 'localhost:9092', 
     'group.id': 'dvd-rental-realtime-group-v2', 
     'auto.offset.reset': 'earliest', 
     'enable.auto.commit': True
