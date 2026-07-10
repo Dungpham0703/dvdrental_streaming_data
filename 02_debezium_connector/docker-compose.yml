@@ -7,19 +7,16 @@ services:
     environment:
       BOOTSTRAP_SERVERS: ${KAFKA_BROKER_IP}:${KAFKA_PORT}
       GROUP_ID: 1
-      CONFIG_STORAGE_TOPIC: my_connect_configs
-      OFFSET_STORAGE_TOPIC: my_connect_offsets
-      STATUS_STORAGE_TOPIC: my_connect_statuses
-      # Set Replication Factor to 1 for Single-Node Kafka
+      CONNECT_OFFSET_STORAGE_TOPIC: my_connect_offsets_v2
+      CONNECT_CONFIG_STORAGE_TOPIC: my_connect_configs_v2
+      CONNECT_STATUS_STORAGE_TOPIC: my_connect_statuses_v2
       CONFIG_STORAGE_REPLICATION_FACTOR: 1
       OFFSET_STORAGE_REPLICATION_FACTOR: 1
       STATUS_STORAGE_REPLICATION_FACTOR: 1
-      # Pass host env variables to container
       DB_HOST: ${DB_HOST}
       DB_USER: ${DB_USER}
       DB_PASS: ${DB_PASS}
       DB_NAME: ${DB_NAME}
       KAFKA_SERVER: ${KAFKA_SERVER}
-      # Enable EnvVar ConfigProvider to resolve ${env:VAR} in JSON configs
       CONNECT_CONFIG_PROVIDERS: env
       CONNECT_CONFIG_PROVIDERS_ENV_CLASS: org.apache.kafka.common.config.provider.EnvVarConfigProvider
