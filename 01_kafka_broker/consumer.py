@@ -25,8 +25,10 @@ try:
         if msg.error():
             if msg.error().code() == KafkaError._PARTITION_EOF:
                 continue
+            elif msg.error().code() == KafkaError.UNKNOWN_TOPIC_OR_PART:
+                continue
             else:
-                print(f"❌ Lỗi mạng Kafka rồi đại ca: {msg.error()}")
+                print(f"Lỗi Kafka: {msg.error()}")
                 continue
                 
         if msg.value() is None:  
