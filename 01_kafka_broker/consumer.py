@@ -7,7 +7,7 @@ import os
 env_path = os.path.join(os.path.dirname(__file__), '.env')
 load_dotenv(env_path)
 
-kafka_ip = os.getenv("KAFKA_ADVERTISED_IP", "0.0.0.0")
+kafka_ip = os.getenv("KAFKA_ADVERTISED_IP", "localhost")
 kafka_port = os.getenv("KAFKA_PORT", "9092")
 
 conf = {
