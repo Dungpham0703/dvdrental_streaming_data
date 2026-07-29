@@ -1,8 +1,17 @@
 import json
 from confluent_kafka import Consumer, KafkaError
+# pyrefly: ignore [missing-import]
+from dotenv import load_dotenv
+import os
+
+env_path = os.path.join(os.path.dirname(__file__), '.env')
+load_dotenv(env_path)
+
+kafka_ip = os.getenv("KAFKA_ADVERTISED_IP", "0.0.0.0")
+kafka_port = os.getenv("KAFKA_PORT", "9092")
 
 conf = {
-    'bootstrap.servers': 'localhost:9092', 
+    'bootstrap.servers': f"{kafka_ip}:{kafka_port}", 
     'group.id': 'dvd-rental-realtime-group-v2', 
     'auto.offset.reset': 'earliest', 
     'enable.auto.commit': True
