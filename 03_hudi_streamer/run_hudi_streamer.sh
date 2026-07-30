@@ -17,6 +17,7 @@ echo "bootstrap.servers=${KAFKA_BROKER_IP}:${KAFKA_PORT}" >> /tmp/common.propert
   --conf spark.hadoop.fs.s3a.endpoint=s3.${AWS_REGION}.amazonaws.com \
   --conf spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem \
   --conf spark.hadoop.fs.s3a.path.style.access=true \
+  /opt/spark/jars/spark-core_2.12-3.5.0.jar \
   --config-folder /opt/hudi-configs/tables \
   --base-path-prefix s3a://${S3_BUCKET_NAME}/bronze/ \
   --props /tmp/common.properties \
