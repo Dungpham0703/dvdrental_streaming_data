@@ -1,0 +1,6 @@
+# Enforce LF line endings for configuration files to prevent CRLF execution errors in containers
+*.yml text eol=lf
+*.yaml text eol=lf
+*.properties text eol=lf
+*.sh text eol=lf
+*.json text eol=lf
