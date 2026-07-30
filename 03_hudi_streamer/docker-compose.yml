@@ -18,7 +18,7 @@ services:
       /bin/bash -c "
       echo 'Initializing Apache Hudi MultiTableStreamer for all tables...' &&
       /opt/spark/bin/spark-submit \
-        --class org.apache.hudi.utilities.streamer.MultiTableStreamer \
+        --class org.apache.hudi.utilities.streamer.HoodieMultiTableStreamer \
         --packages org.apache.hudi:hudi-spark3.5-bundle_2.12:0.15.0,org.apache.hudi:hudi-utilities-bundle_2.12:0.15.0,org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.261 \
         --master 'local[2]' \
         --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
