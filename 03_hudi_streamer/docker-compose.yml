@@ -17,7 +17,7 @@ services:
     entrypoint: >
       /bin/bash -c "
       echo 'Initializing Apache Hudi MultiTableStreamer for all tables...' &&
-      cp /opt/hudi-configs/common.properties /tmp/common.properties &&
+      cat /opt/hudi-configs/common.properties | tr -d '\r' > /tmp/common.properties &&
       echo 'bootstrap.servers='$${KAFKA_BROKER_IP}':'$${KAFKA_PORT} >> /tmp/common.properties &&
       /opt/spark/bin/spark-submit \
         --class org.apache.hudi.utilities.streamer.HoodieMultiTableStreamer \
