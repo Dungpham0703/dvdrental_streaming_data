@@ -7,9 +7,9 @@ services:
     environment:
       BOOTSTRAP_SERVERS: ${KAFKA_BROKER_IP}:${KAFKA_PORT}
       GROUP_ID: 1
-      CONFIG_STORAGE_TOPIC: my_connect_configs_v5
-      OFFSET_STORAGE_TOPIC: my_connect_offsets_v5
-      STATUS_STORAGE_TOPIC: my_connect_statuses_v5
+      CONFIG_STORAGE_TOPIC: my_connect_configs_v6
+      OFFSET_STORAGE_TOPIC: my_connect_offsets_v6
+      STATUS_STORAGE_TOPIC: my_connect_statuses_v6
       CONFIG_STORAGE_REPLICATION_FACTOR: 1
       OFFSET_STORAGE_REPLICATION_FACTOR: 1
       STATUS_STORAGE_REPLICATION_FACTOR: 1
