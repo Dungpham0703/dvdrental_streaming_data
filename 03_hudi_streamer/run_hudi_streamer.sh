@@ -21,5 +21,6 @@ echo "bootstrap.servers=${KAFKA_BROKER_IP}:${KAFKA_PORT}" >> /tmp/common.propert
   --config-folder /opt/hudi-configs/tables \
   --base-path-prefix s3a://${S3_BUCKET_NAME}/bronze/ \
   --props /tmp/common.properties \
+  --source-class org.apache.hudi.utilities.sources.JsonKafkaSource \
   --table-type MERGE_ON_READ \
   --continuous
