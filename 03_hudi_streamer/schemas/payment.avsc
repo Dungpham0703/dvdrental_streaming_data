@@ -1,0 +1,14 @@
+{
+  "type": "record",
+  "name": "payment",
+  "namespace": "public",
+  "fields": [
+    {"name": "payment_id", "type": ["null", "int"], "default": null},
+    {"name": "customer_id", "type": ["null", "int"], "default": null},
+    {"name": "staff_id", "type": ["null", "int"], "default": null},
+    {"name": "rental_id", "type": ["null", "int"], "default": null},
+    {"name": "amount", "type": ["null", "double"], "default": null},
+    {"name": "payment_date", "type": ["null", "string"], "default": null},
+    {"name": "ts_ms", "type": ["null", "long"], "default": null}
+  ]
+}

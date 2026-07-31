@@ -1,0 +1,18 @@
+{
+  "type": "record",
+  "name": "staff",
+  "namespace": "public",
+  "fields": [
+    {"name": "staff_id", "type": ["null", "int"], "default": null},
+    {"name": "first_name", "type": ["null", "string"], "default": null},
+    {"name": "last_name", "type": ["null", "string"], "default": null},
+    {"name": "address_id", "type": ["null", "int"], "default": null},
+    {"name": "email", "type": ["null", "string"], "default": null},
+    {"name": "store_id", "type": ["null", "int"], "default": null},
+    {"name": "active", "type": ["null", "boolean"], "default": null},
+    {"name": "username", "type": ["null", "string"], "default": null},
+    {"name": "password", "type": ["null", "string"], "default": null},
+    {"name": "last_update", "type": ["null", "string"], "default": null},
+    {"name": "ts_ms", "type": ["null", "long"], "default": null}
+  ]
+}
