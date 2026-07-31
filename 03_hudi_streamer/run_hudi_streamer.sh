@@ -1,7 +1,9 @@
 echo 'Initializing Apache Hudi MultiTableStreamer for all tables...'
 
-# Sanitize properties file to remove CRLF (\r) carriage returns
-tr -d '\r' < /opt/hudi-configs/common.properties > /tmp/common.properties
+# Sanitize ALL config files to remove Windows CRLF (\r) carriage returns
+find /opt/hudi-configs -type f \( -name "*.properties" -o -name "*.avsc" \) -exec sed -i 's/\r$//' {} +
+
+cp /opt/hudi-configs/common.properties /tmp/common.properties
 echo "bootstrap.servers=${KAFKA_BROKER_IP}:${KAFKA_PORT}" >> /tmp/common.properties
 
 /opt/spark/bin/spark-submit \
