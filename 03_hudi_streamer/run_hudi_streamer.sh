@@ -6,7 +6,7 @@ echo "bootstrap.servers=${KAFKA_BROKER_IP}:${KAFKA_PORT}" >> /tmp/common.propert
 
 /opt/spark/bin/spark-submit \
   --class org.apache.hudi.utilities.streamer.HoodieMultiTableStreamer \
-  --packages org.apache.hudi:hudi-spark3.5-bundle_2.12:0.15.0,org.apache.hudi:hudi-utilities-bundle_2.12:0.15.0,org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.261 \
+  --packages org.apache.hudi:hudi-spark3.5-bundle_2.12:0.15.0,org.apache.hudi:hudi-utilities-bundle_2.12:0.15.0,org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.261 \
   --master 'local[2]' \
   --driver-memory 2g \
   --executor-memory 2g \
