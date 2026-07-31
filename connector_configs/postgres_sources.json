@@ -12,6 +12,10 @@
     "database.dbname": "${env:DB_NAME}",
     "topic.prefix": "cdc",
     
-    "table.include.list": "public.*"
+    "table.include.list": "public.*",
+    
+    "transforms": "unwrap",
+    "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
+    "transforms.unwrap.drop.tombstones": "true"
   }
 }
