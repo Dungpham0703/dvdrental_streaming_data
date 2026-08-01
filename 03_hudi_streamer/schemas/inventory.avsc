@@ -3,7 +3,7 @@
   "name": "inventory",
   "namespace": "public",
   "fields": [
-    {"name": "inventory_id", "type": ["null", "int"], "default": null},
+    {"name": "inventory_id", "type": "int"},
     {"name": "film_id", "type": ["null", "int"], "default": null},
     {"name": "store_id", "type": ["null", "int"], "default": null},
     {"name": "last_update", "type": ["null", "string"], "default": null},

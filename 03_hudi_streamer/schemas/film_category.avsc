@@ -3,8 +3,8 @@
   "name": "film_category",
   "namespace": "public",
   "fields": [
-    {"name": "film_id", "type": ["null", "int"], "default": null},
-    {"name": "category_id", "type": ["null", "int"], "default": null},
+    {"name": "film_id", "type": "int"},
+    {"name": "category_id", "type": "int"},
     {"name": "last_update", "type": ["null", "string"], "default": null},
     {"name": "ts_ms", "type": ["null", "long"], "default": null}
   ]

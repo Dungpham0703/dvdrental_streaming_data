@@ -3,7 +3,7 @@
   "name": "address",
   "namespace": "public",
   "fields": [
-    {"name": "address_id", "type": ["null", "int"], "default": null},
+    {"name": "address_id", "type": "int"},
     {"name": "address", "type": ["null", "string"], "default": null},
     {"name": "address2", "type": ["null", "string"], "default": null},
     {"name": "district", "type": ["null", "string"], "default": null},

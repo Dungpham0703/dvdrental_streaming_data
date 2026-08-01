@@ -3,7 +3,7 @@
   "name": "category",
   "namespace": "public",
   "fields": [
-    {"name": "category_id", "type": ["null", "int"], "default": null},
+    {"name": "category_id", "type": "int"},
     {"name": "name", "type": ["null", "string"], "default": null},
     {"name": "last_update", "type": ["null", "string"], "default": null},
     {"name": "ts_ms", "type": ["null", "long"], "default": null}

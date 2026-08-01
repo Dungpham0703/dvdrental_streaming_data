@@ -3,7 +3,7 @@
   "name": "customer",
   "namespace": "public",
   "fields": [
-    {"name": "customer_id", "type": ["null", "int"], "default": null},
+    {"name": "customer_id", "type": "int"},
     {"name": "store_id", "type": ["null", "int"], "default": null},
     {"name": "first_name", "type": ["null", "string"], "default": null},
     {"name": "last_name", "type": ["null", "string"], "default": null},

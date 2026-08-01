@@ -3,7 +3,7 @@
   "name": "staff",
   "namespace": "public",
   "fields": [
-    {"name": "staff_id", "type": ["null", "int"], "default": null},
+    {"name": "staff_id", "type": "int"},
     {"name": "first_name", "type": ["null", "string"], "default": null},
     {"name": "last_name", "type": ["null", "string"], "default": null},
     {"name": "address_id", "type": ["null", "int"], "default": null},

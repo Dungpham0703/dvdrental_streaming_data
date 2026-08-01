@@ -3,7 +3,7 @@
   "name": "rental",
   "namespace": "public",
   "fields": [
-    {"name": "rental_id", "type": ["null", "int"], "default": null},
+    {"name": "rental_id", "type": "int"},
     {"name": "rental_date", "type": ["null", "string"], "default": null},
     {"name": "inventory_id", "type": ["null", "int"], "default": null},
     {"name": "customer_id", "type": ["null", "int"], "default": null},

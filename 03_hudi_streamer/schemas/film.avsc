@@ -3,7 +3,7 @@
   "name": "film",
   "namespace": "public",
   "fields": [
-    {"name": "film_id", "type": ["null", "int"], "default": null},
+    {"name": "film_id", "type": "int"},
     {"name": "title", "type": ["null", "string"], "default": null},
     {"name": "description", "type": ["null", "string"], "default": null},
     {"name": "release_year", "type": ["null", "int"], "default": null},

@@ -3,7 +3,7 @@
   "name": "payment",
   "namespace": "public",
   "fields": [
-    {"name": "payment_id", "type": ["null", "int"], "default": null},
+    {"name": "payment_id", "type": "int"},
     {"name": "customer_id", "type": ["null", "int"], "default": null},
     {"name": "staff_id", "type": ["null", "int"], "default": null},
     {"name": "rental_id", "type": ["null", "int"], "default": null},
