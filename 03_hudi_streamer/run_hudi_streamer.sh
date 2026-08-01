@@ -29,5 +29,4 @@ ln -sf /tmp/common.properties /opt/spark/work-dir/src/test/resources/streamer-co
   --source-class org.apache.hudi.utilities.sources.JsonKafkaSource \
   --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider \
   --table-type MERGE_ON_READ \
-  --source-ordering-field __ts_ms \
-  --continuous
+  --source-ordering-field __ts_ms
