@@ -5,6 +5,7 @@
   "fields": [
     {"name": "language_id",  "type": "int"},
     {"name": "name",         "type": ["null", "string"], "default": null},
-    {"name": "last_update",  "type": ["null", "string"], "default": null}
+    {"name": "last_update",  "type": ["null", "string"], "default": null},
+    {"name": "__ts_ms",      "type": ["null", "long"],   "default": null}
   ]
 }

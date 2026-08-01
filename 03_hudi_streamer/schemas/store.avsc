@@ -6,6 +6,7 @@
     {"name": "store_id",          "type": "int"},
     {"name": "manager_staff_id",  "type": ["null", "int"],    "default": null},
     {"name": "address_id",        "type": ["null", "int"],    "default": null},
-    {"name": "last_update",       "type": ["null", "string"], "default": null}
+    {"name": "last_update",       "type": ["null", "string"], "default": null},
+    {"name": "__ts_ms",           "type": ["null", "long"],   "default": null}
   ]
 }

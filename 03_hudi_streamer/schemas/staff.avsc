@@ -13,6 +13,7 @@
     {"name": "username",    "type": ["null", "string"],  "default": null},
     {"name": "password",    "type": ["null", "string"],  "default": null},
     {"name": "last_update", "type": ["null", "string"],  "default": null},
-    {"name": "picture",     "type": ["null", "bytes"],   "default": null}
+    {"name": "picture",     "type": ["null", "bytes"],   "default": null},
+    {"name": "__ts_ms",     "type": ["null", "long"],    "default": null}
   ]
 }
