@@ -3,16 +3,16 @@
   "name": "customer",
   "namespace": "public",
   "fields": [
-    {"name": "customer_id", "type": "int"},
-    {"name": "store_id", "type": ["null", "int"], "default": null},
-    {"name": "first_name", "type": ["null", "string"], "default": null},
-    {"name": "last_name", "type": ["null", "string"], "default": null},
-    {"name": "email", "type": ["null", "string"], "default": null},
-    {"name": "address_id", "type": ["null", "int"], "default": null},
-    {"name": "activebool", "type": ["null", "boolean"], "default": null},
-    {"name": "create_date", "type": ["null", "string"], "default": null},
-    {"name": "last_update", "type": ["null", "string"], "default": null},
-    {"name": "active", "type": ["null", "int"], "default": null},
-    {"name": "ts_ms", "type": ["null", "long"], "default": null}
+    {"name": "customer_id",  "type": "int"},
+    {"name": "store_id",     "type": ["null", "int"],     "default": null},
+    {"name": "first_name",   "type": ["null", "string"],  "default": null},
+    {"name": "last_name",    "type": ["null", "string"],  "default": null},
+    {"name": "email",        "type": ["null", "string"],  "default": null},
+    {"name": "address_id",   "type": ["null", "int"],     "default": null},
+    {"name": "activebool",   "type": ["null", "boolean"], "default": null},
+    {"name": "create_date",  "type": ["null", "string"],  "default": null},
+    {"name": "last_update",  "type": ["null", "string"],  "default": null},
+    {"name": "active",       "type": ["null", "int"],     "default": null},
+    {"name": "ts_ms",        "type": ["null", "long"],    "default": null}
   ]
 }

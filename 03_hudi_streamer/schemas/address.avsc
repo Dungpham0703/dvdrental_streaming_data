@@ -3,14 +3,14 @@
   "name": "address",
   "namespace": "public",
   "fields": [
-    {"name": "address_id", "type": "int"},
-    {"name": "address", "type": ["null", "string"], "default": null},
-    {"name": "address2", "type": ["null", "string"], "default": null},
-    {"name": "district", "type": ["null", "string"], "default": null},
-    {"name": "city_id", "type": ["null", "int"], "default": null},
-    {"name": "postal_code", "type": ["null", "string"], "default": null},
-    {"name": "phone", "type": ["null", "string"], "default": null},
-    {"name": "last_update", "type": ["null", "string"], "default": null},
-    {"name": "ts_ms", "type": ["null", "long"], "default": null}
+    {"name": "address_id",   "type": "int"},
+    {"name": "address",      "type": ["null", "string"], "default": null},
+    {"name": "address2",     "type": ["null", "string"], "default": null},
+    {"name": "district",     "type": ["null", "string"], "default": null},
+    {"name": "city_id",      "type": ["null", "int"],    "default": null},
+    {"name": "postal_code",  "type": ["null", "string"], "default": null},
+    {"name": "phone",        "type": ["null", "string"], "default": null},
+    {"name": "last_update",  "type": ["null", "string"], "default": null},
+    {"name": "ts_ms",        "type": ["null", "long"],   "default": null}
   ]
 }

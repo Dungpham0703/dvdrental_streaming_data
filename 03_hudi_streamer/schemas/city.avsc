@@ -3,10 +3,10 @@
   "name": "city",
   "namespace": "public",
   "fields": [
-    {"name": "city_id", "type": "int"},
-    {"name": "city", "type": ["null", "string"], "default": null},
-    {"name": "country_id", "type": ["null", "int"], "default": null},
+    {"name": "city_id",     "type": "int"},
+    {"name": "city",        "type": ["null", "string"], "default": null},
+    {"name": "country_id",  "type": ["null", "int"],    "default": null},
     {"name": "last_update", "type": ["null", "string"], "default": null},
-    {"name": "ts_ms", "type": ["null", "long"], "default": null}
+    {"name": "ts_ms",       "type": ["null", "long"],   "default": null}
   ]
 }
