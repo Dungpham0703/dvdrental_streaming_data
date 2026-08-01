@@ -15,7 +15,6 @@
     {"name": "rating",            "type": ["null", "string"], "default": null},
     {"name": "last_update",       "type": ["null", "string"], "default": null},
     {"name": "special_features",  "type": ["null", "string"], "default": null},
-    {"name": "fulltext",          "type": ["null", "string"], "default": null},
-    {"name": "ts_ms",             "type": ["null", "long"],   "default": null}
+    {"name": "fulltext",          "type": ["null", "string"], "default": null}
   ]
 }
