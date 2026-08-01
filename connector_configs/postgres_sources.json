@@ -15,6 +15,7 @@
     "table.include.list": "public.*",
     "snapshot.mode": "initial",
     "publication.autocreate.mode": "all_tables",
+    "decimal.handling.mode": "double",
     
     "key.converter": "org.apache.kafka.connect.json.JsonConverter",
     "key.converter.schemas.enable": "false",
