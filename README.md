@@ -32,6 +32,34 @@ The dataset consists of 15 normalized (3NF) tables on PostgreSQL RDS, representi
 
 ### Data Warehouse Modeling (Star Schema & SCD Type 2)
 
+To transform the data from 3NF into an analytics-ready format, the system is modeled using a Star Schema. The pipeline tracks full historical states of the dimension tables (SCD Type 2) while centralizing business metrics in the fact tables.
+
+      ┌─────────────────────────┐             ┌─────────────────────────┐
+      │      dim_customer       │             │        dim_date         │
+      │ ----------------------- │             │ ----------------------- │
+      │ (SCD Type 2 History)    │             │ (Time Context)          │
+      │ PK: customer_key        │             │ PK: date_key            │
+      │ valid_from, valid_to    │             │ day, month, year...     │
+      └───────────┬─────────────┘             └─────────────┬───────────┘
+                  │ 1:N                                     │ 1:N
+                  │           ┌───────────────┐             │
+                  └─────────► │  FACT TABLES  │ ◄───────────┘
+                              │ ------------- │
+                              │ fact_rental   │
+                              │ fact_payment  │
+                  ┌─────────► │               │ ◄───────────┐
+                  │ 1:N       └───────────────┘       1:N   │
+                  │                                         │
+      ┌───────────┴─────────────┐             ┌─────────────┴───────────┐
+      │        dim_film         │             │     dim_store_staff     │
+      │ ----------------------- │             │ ----------------------- │
+      │ (Movie Details)         │             │ (Location/Staff Info)   │
+      │ PK: film_key            │             │ PK: store_key/staff_key │
+      │ title, category, rating │             │ address, city, country  │
+      └─────────────────────────┘             └─────────────────────────┘
+
+### Data Warehouse Modeling (Star Schema & SCD Type 2)
+
 To transform the data from 3NF into an analytics-ready format, the system is modeled using a Star Schema:
 
 - Fact Tables (Transactional Events):
@@ -58,27 +86,7 @@ To transform the data from 3NF into an analytics-ready format, the system is mod
 
 ### Overall Architecture (Modern Medallion Lakehouse)
 
-[AWS RDS Postgres Source]
-| (WAL Log / pgoutput)
-v
-[Debezium Connect Node - EC2 Node 2]
-| (Topic: cdc_postgres_rds.public.\*)
-v
-[Kafka Broker Node - EC2 Node 1]
-| (Hudi MultiTableStreamer / Spark)
-v
-[BRONZE LAYER] (Raw S3 Data Lake - Parquet/Avro)
-| (dbt / Athena Transformation)
-v
-[SILVER LAYER] (Cleansed / Staging Data - S3)
-| (dbt Transformation - Star Schema & SCD Type 2)
-v
-[GOLD LAYER] (Data Marts & Aggregations - S3)
-|
-v
-[BI Dashboard / Metabase / Analytics]
-
----
+![alt text](src/data_platform_architect.png)
 
 ## 4. Implementation Details
 
