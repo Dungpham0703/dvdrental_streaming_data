@@ -31,6 +31,32 @@ def get_db_size_gb(cur):
     cur.execute(f"SELECT pg_database_size('{DB_NAME}') / (1024.0 * 1024 * 1024)")
     return cur.fetchone()[0]
 
+def upscale_smallint_columns():
+    print("=" * 60)
+    print("PHASE 0: Upgrading smallint columns to integer (prevent overflow)")
+    print("=" * 60)
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT table_name, column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND data_type = 'smallint'
+          AND table_name NOT IN ('pg_stat_statements')
+        ORDER BY table_name, column_name
+    """)
+    columns_to_alter = cur.fetchall()
+    if not columns_to_alter:
+        print("No smallint columns found. Skipping.")
+    else:
+        for table, column in columns_to_alter:
+            print(f"  ALTER {table}.{column}: smallint -> integer")
+            cur.execute(f'ALTER TABLE "{table}" ALTER COLUMN "{column}" TYPE integer')
+        print(f"Upgraded {len(columns_to_alter)} columns.")
+    print("Phase 0 complete!")
+    cur.close()
+    conn.close()
+
 def seed_dimensions():
     print("=" * 60)
     print("PHASE 1: Seeding dimension tables")
@@ -235,6 +261,7 @@ if __name__ == "__main__":
     cur.close()
     conn.close()
 
+    upscale_smallint_columns()
     seed_dimensions()
     seed_bridge_tables()
     seed_inventory()
