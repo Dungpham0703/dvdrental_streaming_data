@@ -217,41 +217,47 @@ def blast_transactions(worker_id, batch_size, target_gb):
     start_time = time.time()
 
     while True:
-        if total_inserted % (batch_size * 20) == 0 and total_inserted > 0:
-            current_gb = get_db_size_gb(cur)
-            elapsed = time.time() - start_time
-            rate = total_inserted / elapsed if elapsed > 0 else 0
-            print(f"Worker {worker_id}: {total_inserted:,} rows | DB: {current_gb:.2f} GB / {target_gb} GB | {rate:.0f} rows/sec")
-            if current_gb >= target_gb:
-                print(f"Worker {worker_id}: Target reached! Stopping.")
-                break
+        try:
+            if total_inserted % (batch_size * 20) == 0 and total_inserted > 0:
+                current_gb = get_db_size_gb(cur)
+                elapsed = time.time() - start_time
+                rate = total_inserted / elapsed if elapsed > 0 else 0
+                print(f"Worker {worker_id}: {total_inserted:,} rows | DB: {current_gb:.2f} GB / {target_gb} GB | {rate:.0f} rows/sec")
+                if current_gb >= target_gb:
+                    print(f"Worker {worker_id}: Target reached! Stopping.")
+                    break
 
-        rental_data = []
-        for _ in range(batch_size):
-            rental_data.append((
-                fake.date_time_this_year().strftime('%Y-%m-%d %H:%M:%S'),
-                random.choice(inventory_ids),
-                random.choice(customer_ids),
-                random.choice(staff_ids)
-            ))
-        psycopg2.extras.execute_values(cur,
-            "INSERT INTO rental (rental_date, inventory_id, customer_id, staff_id) VALUES %s",
-            rental_data, page_size=5000)
+            rental_data = []
+            for _ in range(batch_size):
+                rental_data.append((
+                    fake.date_time_this_year().strftime('%Y-%m-%d %H:%M:%S'),
+                    random.choice(inventory_ids),
+                    random.choice(customer_ids),
+                    random.choice(staff_ids)
+                ))
+            psycopg2.extras.execute_values(cur,
+                "INSERT INTO rental (rental_date, inventory_id, customer_id, staff_id) VALUES %s ON CONFLICT DO NOTHING",
+                rental_data, page_size=5000)
 
-        payment_data = []
-        for _ in range(batch_size):
-            payment_data.append((
-                random.choice(customer_ids),
-                random.choice(staff_ids),
-                random.choice(rental_ids),
-                round(random.uniform(0.99, 9.99), 2),
-                fake.date_time_this_year().strftime('%Y-%m-%d %H:%M:%S')
-            ))
-        psycopg2.extras.execute_values(cur,
-            "INSERT INTO payment (customer_id, staff_id, rental_id, amount, payment_date) VALUES %s",
-            payment_data, page_size=5000)
+            payment_data = []
+            for _ in range(batch_size):
+                payment_data.append((
+                    random.choice(customer_ids),
+                    random.choice(staff_ids),
+                    random.choice(rental_ids),
+                    round(random.uniform(0.99, 9.99), 2),
+                    fake.date_time_this_year().strftime('%Y-%m-%d %H:%M:%S')
+                ))
+            psycopg2.extras.execute_values(cur,
+                "INSERT INTO payment (customer_id, staff_id, rental_id, amount, payment_date) VALUES %s ON CONFLICT DO NOTHING",
+                payment_data, page_size=5000)
 
-        total_inserted += batch_size * 2
+            total_inserted += batch_size * 2
+
+        except Exception as e:
+            print(f"Worker {worker_id} Warning: Batch failed (retrying): {e}")
+            conn.rollback()
+            time.sleep(1)
 
     cur.close()
     conn.close()
