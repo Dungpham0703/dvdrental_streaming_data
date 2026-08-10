@@ -9,12 +9,12 @@
     {"name": "release_year",      "type": ["null", "int"],    "default": null},
     {"name": "language_id",       "type": ["null", "int"],    "default": null},
     {"name": "rental_duration",   "type": ["null", "int"],    "default": null},
-    {"name": "rental_rate",       "type": ["null", "double"], "default": null},
+    {"name": "rental_rate",       "type": ["null", "string"], "default": null},
     {"name": "length",            "type": ["null", "int"],    "default": null},
-    {"name": "replacement_cost",  "type": ["null", "double"], "default": null},
+    {"name": "replacement_cost",  "type": ["null", "string"], "default": null},
     {"name": "rating",            "type": ["null", "string"], "default": null},
     {"name": "last_update",       "type": ["null", "string"], "default": null},
-    {"name": "special_features",  "type": ["null", "string"], "default": null},
+    {"name": "special_features",  "type": ["null", {"type": "array", "items": "string"}], "default": null},
     {"name": "fulltext",          "type": ["null", "string"], "default": null},
     {"name": "__ts_ms",           "type": ["null", "long"],   "default": null}
   ]
