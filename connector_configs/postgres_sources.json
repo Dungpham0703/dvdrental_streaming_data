@@ -27,6 +27,10 @@
     "transforms.unwrap.drop.tombstones": "true",
     "transforms.unwrap.add.fields": "ts_ms",
     "transforms.cast.type": "org.apache.kafka.connect.transforms.Cast$Value",
-    "transforms.cast.spec": "special_features:string"
+    "transforms.cast.spec": "special_features:string",
+    "transforms.cast.predicate": "isFilmTable",
+    "predicates": "isFilmTable",
+    "predicates.isFilmTable.type": "org.apache.kafka.connect.transforms.predicates.TopicNameMatches",
+    "predicates.isFilmTable.pattern": "cdc\\.public\\.film"
   }
 }
