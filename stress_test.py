@@ -37,6 +37,17 @@ def upscale_smallint_columns():
     print("=" * 60)
     conn = get_connection()
     cur = conn.cursor()
+
+    cur.execute("""
+        SELECT table_name FROM information_schema.views
+        WHERE table_schema = 'public'
+    """)
+    views = [row[0] for row in cur.fetchall()]
+    if views:
+        print(f"  Dropping {len(views)} views: {', '.join(views)}")
+        for view in views:
+            cur.execute(f'DROP VIEW IF EXISTS "{view}" CASCADE')
+
     cur.execute("""
         SELECT table_name, column_name
         FROM information_schema.columns
@@ -47,15 +58,13 @@ def upscale_smallint_columns():
     """)
     columns_to_alter = cur.fetchall()
     if not columns_to_alter:
-        print("No smallint columns found. Skipping.")
+        print("  No smallint columns found. Skipping.")
     else:
         for table, column in columns_to_alter:
             print(f"  ALTER {table}.{column}: smallint -> integer")
             cur.execute(f'ALTER TABLE "{table}" ALTER COLUMN "{column}" TYPE integer')
-        print(f"Upgraded {len(columns_to_alter)} columns.")
+        print(f"  Upgraded {len(columns_to_alter)} columns.")
     print("Phase 0 complete!")
-    cur.close()
-    conn.close()
 
 def seed_dimensions():
     print("=" * 60)
