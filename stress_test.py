@@ -201,8 +201,12 @@ def seed_inventory():
     cur.close()
     conn.close()
 
+def random_date():
+    # Fast random date in 2026
+    t = random.randint(1767225600, 1798761600)
+    return time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(t))
+
 def blast_transactions(worker_id, batch_size, target_gb):
-    fake = Faker()
     conn = get_connection()
     cur = conn.cursor()
 
@@ -230,7 +234,7 @@ def blast_transactions(worker_id, batch_size, target_gb):
             rental_data = []
             for _ in range(batch_size):
                 rental_data.append((
-                    fake.date_time_this_year().strftime('%Y-%m-%d %H:%M:%S'),
+                    random_date(),
                     random.choice(inventory_ids),
                     random.choice(customer_ids),
                     random.choice(staff_ids)
@@ -246,7 +250,7 @@ def blast_transactions(worker_id, batch_size, target_gb):
                     random.choice(staff_ids),
                     random.choice(rental_ids),
                     round(random.uniform(0.99, 9.99), 2),
-                    fake.date_time_this_year().strftime('%Y-%m-%d %H:%M:%S')
+                    random_date()
                 ))
             psycopg2.extras.execute_values(cur,
                 "INSERT INTO payment (customer_id, staff_id, rental_id, amount, payment_date) VALUES %s ON CONFLICT DO NOTHING",
