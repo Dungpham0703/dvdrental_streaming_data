@@ -14,4 +14,4 @@ services:
       - S3_BUCKET_NAME=${S3_BUCKET_NAME}
     volumes:
       - ./:/opt/hudi-configs
-    entrypoint: /bin/bash /opt/hudi-configs/run_hudi_initial_load.sh
+    entrypoint: /bin/bash /opt/hudi-configs/run_hudi_streamer.sh

@@ -4,3 +4,4 @@
 .DS_Store
 .vscode/
 src/__pycache__
+TROUBLESHOOTING_CDC_HUDI.md
