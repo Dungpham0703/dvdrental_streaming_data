@@ -1,358 +1,368 @@
-CREATE DATABASE IF NOT EXISTS `dvdrental_bronze`;
+CREATE DATABASE IF NOT EXISTS `default`;
+
+-- ============================================================
+-- Hudi MOR tables for Athena (Snapshot View)
+-- Uses HoodieParquetRealtimeInputFormat to read both
+-- compacted base files AND delta log files for full accuracy.
+-- ============================================================
 
 -- Table: actor
-CREATE EXTERNAL TABLE IF NOT EXISTS `dvdrental_bronze`.`actor` (
-  `_hoodie_commit_time` string,
-  `_hoodie_commit_seqno` string,
-  `_hoodie_record_key` string,
-  `_hoodie_partition_path` string,
-  `_hoodie_file_name` string,
-  `actor_id` int,
-  `first_name` string,
-  `last_name` string,
-  `last_update` string,
-  `__ts_ms` bigint
+CREATE EXTERNAL TABLE IF NOT EXISTS `default`.`actor` (
+  `_hoodie_commit_time` STRING,
+  `_hoodie_commit_seqno` STRING,
+  `_hoodie_record_key` STRING,
+  `_hoodie_partition_path` STRING,
+  `_hoodie_file_name` STRING,
+  `actor_id` INT,
+  `first_name` STRING,
+  `last_name` STRING,
+  `last_update` STRING,
+  `__ts_ms` BIGINT,
+  `__op` STRING,
+  `__deleted` STRING
 )
-ROW FORMAT SERDE
-  'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
-STORED AS INPUTFORMAT
-  'org.apache.hudi.hadoop.HoodieParquetInputFormat'
-OUTPUTFORMAT
-  'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat'
-LOCATION
-  's3://dvd-rental-lakehouse/bronze/actor/';
+ROW FORMAT SERDE 'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
+STORED AS INPUTFORMAT 'org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat'
+OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat'
+LOCATION 's3://dvd-rental-lakehouse/bronze/default/actor/'
+TBLPROPERTIES ('classification'='hudi');
 
 -- Table: address
-CREATE EXTERNAL TABLE IF NOT EXISTS `dvdrental_bronze`.`address` (
-  `_hoodie_commit_time` string,
-  `_hoodie_commit_seqno` string,
-  `_hoodie_record_key` string,
-  `_hoodie_partition_path` string,
-  `_hoodie_file_name` string,
-  `address_id` int,
-  `address` string,
-  `address2` string,
-  `district` string,
-  `city_id` int,
-  `postal_code` string,
-  `phone` string,
-  `last_update` string,
-  `__ts_ms` bigint
+CREATE EXTERNAL TABLE IF NOT EXISTS `default`.`address` (
+  `_hoodie_commit_time` STRING,
+  `_hoodie_commit_seqno` STRING,
+  `_hoodie_record_key` STRING,
+  `_hoodie_partition_path` STRING,
+  `_hoodie_file_name` STRING,
+  `address_id` INT,
+  `address` STRING,
+  `address2` STRING,
+  `district` STRING,
+  `city_id` INT,
+  `postal_code` STRING,
+  `phone` STRING,
+  `last_update` STRING,
+  `__ts_ms` BIGINT,
+  `__op` STRING,
+  `__deleted` STRING
 )
-ROW FORMAT SERDE
-  'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
-STORED AS INPUTFORMAT
-  'org.apache.hudi.hadoop.HoodieParquetInputFormat'
-OUTPUTFORMAT
-  'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat'
-LOCATION
-  's3://dvd-rental-lakehouse/bronze/address/';
+ROW FORMAT SERDE 'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
+STORED AS INPUTFORMAT 'org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat'
+OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat'
+LOCATION 's3://dvd-rental-lakehouse/bronze/default/address/'
+TBLPROPERTIES ('classification'='hudi');
 
 -- Table: category
-CREATE EXTERNAL TABLE IF NOT EXISTS `dvdrental_bronze`.`category` (
-  `_hoodie_commit_time` string,
-  `_hoodie_commit_seqno` string,
-  `_hoodie_record_key` string,
-  `_hoodie_partition_path` string,
-  `_hoodie_file_name` string,
-  `category_id` int,
-  `name` string,
-  `last_update` string,
-  `__ts_ms` bigint
+CREATE EXTERNAL TABLE IF NOT EXISTS `default`.`category` (
+  `_hoodie_commit_time` STRING,
+  `_hoodie_commit_seqno` STRING,
+  `_hoodie_record_key` STRING,
+  `_hoodie_partition_path` STRING,
+  `_hoodie_file_name` STRING,
+  `category_id` INT,
+  `name` STRING,
+  `last_update` STRING,
+  `__ts_ms` BIGINT,
+  `__op` STRING,
+  `__deleted` STRING
 )
-ROW FORMAT SERDE
-  'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
-STORED AS INPUTFORMAT
-  'org.apache.hudi.hadoop.HoodieParquetInputFormat'
-OUTPUTFORMAT
-  'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat'
-LOCATION
-  's3://dvd-rental-lakehouse/bronze/category/';
+ROW FORMAT SERDE 'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
+STORED AS INPUTFORMAT 'org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat'
+OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat'
+LOCATION 's3://dvd-rental-lakehouse/bronze/default/category/'
+TBLPROPERTIES ('classification'='hudi');
 
 -- Table: city
-CREATE EXTERNAL TABLE IF NOT EXISTS `dvdrental_bronze`.`city` (
-  `_hoodie_commit_time` string,
-  `_hoodie_commit_seqno` string,
-  `_hoodie_record_key` string,
-  `_hoodie_partition_path` string,
-  `_hoodie_file_name` string,
-  `city_id` int,
-  `city` string,
-  `country_id` int,
-  `last_update` string,
-  `__ts_ms` bigint
+CREATE EXTERNAL TABLE IF NOT EXISTS `default`.`city` (
+  `_hoodie_commit_time` STRING,
+  `_hoodie_commit_seqno` STRING,
+  `_hoodie_record_key` STRING,
+  `_hoodie_partition_path` STRING,
+  `_hoodie_file_name` STRING,
+  `city_id` INT,
+  `city` STRING,
+  `country_id` INT,
+  `last_update` STRING,
+  `__ts_ms` BIGINT,
+  `__op` STRING,
+  `__deleted` STRING
 )
-ROW FORMAT SERDE
-  'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
-STORED AS INPUTFORMAT
-  'org.apache.hudi.hadoop.HoodieParquetInputFormat'
-OUTPUTFORMAT
-  'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat'
-LOCATION
-  's3://dvd-rental-lakehouse/bronze/city/';
+ROW FORMAT SERDE 'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
+STORED AS INPUTFORMAT 'org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat'
+OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat'
+LOCATION 's3://dvd-rental-lakehouse/bronze/default/city/'
+TBLPROPERTIES ('classification'='hudi');
 
 -- Table: country
-CREATE EXTERNAL TABLE IF NOT EXISTS `dvdrental_bronze`.`country` (
-  `_hoodie_commit_time` string,
-  `_hoodie_commit_seqno` string,
-  `_hoodie_record_key` string,
-  `_hoodie_partition_path` string,
-  `_hoodie_file_name` string,
-  `country_id` int,
-  `country` string,
-  `last_update` string,
-  `__ts_ms` bigint
+CREATE EXTERNAL TABLE IF NOT EXISTS `default`.`country` (
+  `_hoodie_commit_time` STRING,
+  `_hoodie_commit_seqno` STRING,
+  `_hoodie_record_key` STRING,
+  `_hoodie_partition_path` STRING,
+  `_hoodie_file_name` STRING,
+  `country_id` INT,
+  `country` STRING,
+  `last_update` STRING,
+  `__ts_ms` BIGINT,
+  `__op` STRING,
+  `__deleted` STRING
 )
-ROW FORMAT SERDE
-  'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
-STORED AS INPUTFORMAT
-  'org.apache.hudi.hadoop.HoodieParquetInputFormat'
-OUTPUTFORMAT
-  'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat'
-LOCATION
-  's3://dvd-rental-lakehouse/bronze/country/';
+ROW FORMAT SERDE 'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
+STORED AS INPUTFORMAT 'org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat'
+OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat'
+LOCATION 's3://dvd-rental-lakehouse/bronze/default/country/'
+TBLPROPERTIES ('classification'='hudi');
 
 -- Table: customer
-CREATE EXTERNAL TABLE IF NOT EXISTS `dvdrental_bronze`.`customer` (
-  `_hoodie_commit_time` string,
-  `_hoodie_commit_seqno` string,
-  `_hoodie_record_key` string,
-  `_hoodie_partition_path` string,
-  `_hoodie_file_name` string,
-  `customer_id` int,
-  `store_id` int,
-  `first_name` string,
-  `last_name` string,
-  `email` string,
-  `address_id` int,
-  `activebool` boolean,
-  `create_date` string,
-  `last_update` string,
-  `active` int,
-  `__ts_ms` bigint
+CREATE EXTERNAL TABLE IF NOT EXISTS `default`.`customer` (
+  `_hoodie_commit_time` STRING,
+  `_hoodie_commit_seqno` STRING,
+  `_hoodie_record_key` STRING,
+  `_hoodie_partition_path` STRING,
+  `_hoodie_file_name` STRING,
+  `customer_id` INT,
+  `store_id` INT,
+  `first_name` STRING,
+  `last_name` STRING,
+  `email` STRING,
+  `address_id` INT,
+  `activebool` BOOLEAN,
+  `create_date` STRING,
+  `last_update` STRING,
+  `active` INT,
+  `__ts_ms` BIGINT,
+  `__op` STRING,
+  `__deleted` STRING
 )
-ROW FORMAT SERDE
-  'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
-STORED AS INPUTFORMAT
-  'org.apache.hudi.hadoop.HoodieParquetInputFormat'
-OUTPUTFORMAT
-  'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat'
-LOCATION
-  's3://dvd-rental-lakehouse/bronze/customer/';
+ROW FORMAT SERDE 'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
+STORED AS INPUTFORMAT 'org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat'
+OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat'
+LOCATION 's3://dvd-rental-lakehouse/bronze/default/customer/'
+TBLPROPERTIES ('classification'='hudi');
 
 -- Table: film
-CREATE EXTERNAL TABLE IF NOT EXISTS `dvdrental_bronze`.`film` (
-  `_hoodie_commit_time` string,
-  `_hoodie_commit_seqno` string,
-  `_hoodie_record_key` string,
-  `_hoodie_partition_path` string,
-  `_hoodie_file_name` string,
-  `film_id` int,
-  `title` string,
-  `description` string,
-  `release_year` int,
-  `language_id` int,
-  `rental_duration` int,
-  `rental_rate` string,
-  `length` int,
-  `replacement_cost` string,
-  `rating` string,
-  `last_update` string,
-  `special_features` array<string>,
-  `fulltext` string,
-  `__ts_ms` bigint
+CREATE EXTERNAL TABLE IF NOT EXISTS `default`.`film` (
+  `_hoodie_commit_time` STRING,
+  `_hoodie_commit_seqno` STRING,
+  `_hoodie_record_key` STRING,
+  `_hoodie_partition_path` STRING,
+  `_hoodie_file_name` STRING,
+  `film_id` INT,
+  `title` STRING,
+  `description` STRING,
+  `release_year` INT,
+  `language_id` INT,
+  `rental_duration` INT,
+  `rental_rate` STRING,
+  `length` INT,
+  `replacement_cost` STRING,
+  `rating` STRING,
+  `last_update` STRING,
+  `special_features` ARRAY<STRING>,
+  `fulltext` STRING,
+  `__ts_ms` BIGINT,
+  `__op` STRING,
+  `__deleted` STRING
 )
-ROW FORMAT SERDE
-  'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
-STORED AS INPUTFORMAT
-  'org.apache.hudi.hadoop.HoodieParquetInputFormat'
-OUTPUTFORMAT
-  'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat'
-LOCATION
-  's3://dvd-rental-lakehouse/bronze/film/';
+ROW FORMAT SERDE 'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
+STORED AS INPUTFORMAT 'org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat'
+OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat'
+LOCATION 's3://dvd-rental-lakehouse/bronze/default/film/'
+TBLPROPERTIES ('classification'='hudi');
 
 -- Table: film_actor
-CREATE EXTERNAL TABLE IF NOT EXISTS `dvdrental_bronze`.`film_actor` (
-  `_hoodie_commit_time` string,
-  `_hoodie_commit_seqno` string,
-  `_hoodie_record_key` string,
-  `_hoodie_partition_path` string,
-  `_hoodie_file_name` string,
-  `actor_id` int,
-  `film_id` int,
-  `last_update` string,
-  `__ts_ms` bigint
+CREATE EXTERNAL TABLE IF NOT EXISTS `default`.`film_actor` (
+  `_hoodie_commit_time` STRING,
+  `_hoodie_commit_seqno` STRING,
+  `_hoodie_record_key` STRING,
+  `_hoodie_partition_path` STRING,
+  `_hoodie_file_name` STRING,
+  `actor_id` INT,
+  `film_id` INT,
+  `last_update` STRING,
+  `__ts_ms` BIGINT,
+  `__op` STRING,
+  `__deleted` STRING
 )
-ROW FORMAT SERDE
-  'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
-STORED AS INPUTFORMAT
-  'org.apache.hudi.hadoop.HoodieParquetInputFormat'
-OUTPUTFORMAT
-  'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat'
-LOCATION
-  's3://dvd-rental-lakehouse/bronze/film_actor/';
+ROW FORMAT SERDE 'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
+STORED AS INPUTFORMAT 'org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat'
+OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat'
+LOCATION 's3://dvd-rental-lakehouse/bronze/default/film_actor/'
+TBLPROPERTIES ('classification'='hudi');
 
 -- Table: film_category
-CREATE EXTERNAL TABLE IF NOT EXISTS `dvdrental_bronze`.`film_category` (
-  `_hoodie_commit_time` string,
-  `_hoodie_commit_seqno` string,
-  `_hoodie_record_key` string,
-  `_hoodie_partition_path` string,
-  `_hoodie_file_name` string,
-  `film_id` int,
-  `category_id` int,
-  `last_update` string,
-  `__ts_ms` bigint
+CREATE EXTERNAL TABLE IF NOT EXISTS `default`.`film_category` (
+  `_hoodie_commit_time` STRING,
+  `_hoodie_commit_seqno` STRING,
+  `_hoodie_record_key` STRING,
+  `_hoodie_partition_path` STRING,
+  `_hoodie_file_name` STRING,
+  `film_id` INT,
+  `category_id` INT,
+  `last_update` STRING,
+  `__ts_ms` BIGINT,
+  `__op` STRING,
+  `__deleted` STRING
 )
-ROW FORMAT SERDE
-  'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
-STORED AS INPUTFORMAT
-  'org.apache.hudi.hadoop.HoodieParquetInputFormat'
-OUTPUTFORMAT
-  'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat'
-LOCATION
-  's3://dvd-rental-lakehouse/bronze/film_category/';
+ROW FORMAT SERDE 'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
+STORED AS INPUTFORMAT 'org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat'
+OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat'
+LOCATION 's3://dvd-rental-lakehouse/bronze/default/film_category/'
+TBLPROPERTIES ('classification'='hudi');
 
 -- Table: inventory
-CREATE EXTERNAL TABLE IF NOT EXISTS `dvdrental_bronze`.`inventory` (
-  `_hoodie_commit_time` string,
-  `_hoodie_commit_seqno` string,
-  `_hoodie_record_key` string,
-  `_hoodie_partition_path` string,
-  `_hoodie_file_name` string,
-  `inventory_id` int,
-  `film_id` int,
-  `store_id` int,
-  `last_update` string,
-  `__ts_ms` bigint
+CREATE EXTERNAL TABLE IF NOT EXISTS `default`.`inventory` (
+  `_hoodie_commit_time` STRING,
+  `_hoodie_commit_seqno` STRING,
+  `_hoodie_record_key` STRING,
+  `_hoodie_partition_path` STRING,
+  `_hoodie_file_name` STRING,
+  `inventory_id` INT,
+  `film_id` INT,
+  `store_id` INT,
+  `last_update` STRING,
+  `__ts_ms` BIGINT,
+  `__op` STRING,
+  `__deleted` STRING
 )
-ROW FORMAT SERDE
-  'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
-STORED AS INPUTFORMAT
-  'org.apache.hudi.hadoop.HoodieParquetInputFormat'
-OUTPUTFORMAT
-  'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat'
-LOCATION
-  's3://dvd-rental-lakehouse/bronze/inventory/';
+ROW FORMAT SERDE 'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
+STORED AS INPUTFORMAT 'org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat'
+OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat'
+LOCATION 's3://dvd-rental-lakehouse/bronze/default/inventory/'
+TBLPROPERTIES ('classification'='hudi');
 
 -- Table: language
-CREATE EXTERNAL TABLE IF NOT EXISTS `dvdrental_bronze`.`language` (
-  `_hoodie_commit_time` string,
-  `_hoodie_commit_seqno` string,
-  `_hoodie_record_key` string,
-  `_hoodie_partition_path` string,
-  `_hoodie_file_name` string,
-  `language_id` int,
-  `name` string,
-  `last_update` string,
-  `__ts_ms` bigint
+CREATE EXTERNAL TABLE IF NOT EXISTS `default`.`language` (
+  `_hoodie_commit_time` STRING,
+  `_hoodie_commit_seqno` STRING,
+  `_hoodie_record_key` STRING,
+  `_hoodie_partition_path` STRING,
+  `_hoodie_file_name` STRING,
+  `language_id` INT,
+  `name` STRING,
+  `last_update` STRING,
+  `__ts_ms` BIGINT,
+  `__op` STRING,
+  `__deleted` STRING
 )
-ROW FORMAT SERDE
-  'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
-STORED AS INPUTFORMAT
-  'org.apache.hudi.hadoop.HoodieParquetInputFormat'
-OUTPUTFORMAT
-  'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat'
-LOCATION
-  's3://dvd-rental-lakehouse/bronze/language/';
+ROW FORMAT SERDE 'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
+STORED AS INPUTFORMAT 'org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat'
+OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat'
+LOCATION 's3://dvd-rental-lakehouse/bronze/default/language/'
+TBLPROPERTIES ('classification'='hudi');
 
 -- Table: payment
-CREATE EXTERNAL TABLE IF NOT EXISTS `dvdrental_bronze`.`payment` (
-  `_hoodie_commit_time` string,
-  `_hoodie_commit_seqno` string,
-  `_hoodie_record_key` string,
-  `_hoodie_partition_path` string,
-  `_hoodie_file_name` string,
-  `payment_id` int,
-  `customer_id` int,
-  `staff_id` int,
-  `rental_id` int,
-  `amount` string,
-  `payment_date` string,
-  `last_update` string,
-  `__ts_ms` bigint
+CREATE EXTERNAL TABLE IF NOT EXISTS `default`.`payment` (
+  `_hoodie_commit_time` STRING,
+  `_hoodie_commit_seqno` STRING,
+  `_hoodie_record_key` STRING,
+  `_hoodie_partition_path` STRING,
+  `_hoodie_file_name` STRING,
+  `payment_id` INT,
+  `customer_id` INT,
+  `staff_id` INT,
+  `rental_id` INT,
+  `amount` STRING,
+  `payment_date` STRING,
+  `last_update` STRING,
+  `__ts_ms` BIGINT,
+  `__op` STRING,
+  `__deleted` STRING
 )
-ROW FORMAT SERDE
-  'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
-STORED AS INPUTFORMAT
-  'org.apache.hudi.hadoop.HoodieParquetInputFormat'
-OUTPUTFORMAT
-  'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat'
-LOCATION
-  's3://dvd-rental-lakehouse/bronze/payment/';
+ROW FORMAT SERDE 'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
+STORED AS INPUTFORMAT 'org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat'
+OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat'
+LOCATION 's3://dvd-rental-lakehouse/bronze/default/payment/'
+TBLPROPERTIES ('classification'='hudi');
 
 -- Table: rental
-CREATE EXTERNAL TABLE IF NOT EXISTS `dvdrental_bronze`.`rental` (
-  `_hoodie_commit_time` string,
-  `_hoodie_commit_seqno` string,
-  `_hoodie_record_key` string,
-  `_hoodie_partition_path` string,
-  `_hoodie_file_name` string,
-  `rental_id` int,
-  `rental_date` string,
-  `inventory_id` int,
-  `customer_id` int,
-  `return_date` string,
-  `staff_id` int,
-  `last_update` string,
-  `__ts_ms` bigint
+CREATE EXTERNAL TABLE IF NOT EXISTS `default`.`rental` (
+  `_hoodie_commit_time` STRING,
+  `_hoodie_commit_seqno` STRING,
+  `_hoodie_record_key` STRING,
+  `_hoodie_partition_path` STRING,
+  `_hoodie_file_name` STRING,
+  `rental_id` INT,
+  `rental_date` STRING,
+  `inventory_id` INT,
+  `customer_id` INT,
+  `return_date` STRING,
+  `staff_id` INT,
+  `last_update` STRING,
+  `__ts_ms` BIGINT,
+  `__op` STRING,
+  `__deleted` STRING
 )
-ROW FORMAT SERDE
-  'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
-STORED AS INPUTFORMAT
-  'org.apache.hudi.hadoop.HoodieParquetInputFormat'
-OUTPUTFORMAT
-  'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat'
-LOCATION
-  's3://dvd-rental-lakehouse/bronze/rental/';
+ROW FORMAT SERDE 'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
+STORED AS INPUTFORMAT 'org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat'
+OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat'
+LOCATION 's3://dvd-rental-lakehouse/bronze/default/rental/'
+TBLPROPERTIES ('classification'='hudi');
 
 -- Table: staff
-CREATE EXTERNAL TABLE IF NOT EXISTS `dvdrental_bronze`.`staff` (
-  `_hoodie_commit_time` string,
-  `_hoodie_commit_seqno` string,
-  `_hoodie_record_key` string,
-  `_hoodie_partition_path` string,
-  `_hoodie_file_name` string,
-  `staff_id` int,
-  `first_name` string,
-  `last_name` string,
-  `address_id` int,
-  `email` string,
-  `store_id` int,
-  `active` boolean,
-  `username` string,
-  `password` string,
-  `last_update` string,
-  `picture` string,
-  `__ts_ms` bigint
+CREATE EXTERNAL TABLE IF NOT EXISTS `default`.`staff` (
+  `_hoodie_commit_time` STRING,
+  `_hoodie_commit_seqno` STRING,
+  `_hoodie_record_key` STRING,
+  `_hoodie_partition_path` STRING,
+  `_hoodie_file_name` STRING,
+  `staff_id` INT,
+  `first_name` STRING,
+  `last_name` STRING,
+  `address_id` INT,
+  `email` STRING,
+  `store_id` INT,
+  `active` BOOLEAN,
+  `username` STRING,
+  `password` STRING,
+  `last_update` STRING,
+  `picture` STRING,
+  `__ts_ms` BIGINT,
+  `__op` STRING,
+  `__deleted` STRING
 )
-ROW FORMAT SERDE
-  'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
-STORED AS INPUTFORMAT
-  'org.apache.hudi.hadoop.HoodieParquetInputFormat'
-OUTPUTFORMAT
-  'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat'
-LOCATION
-  's3://dvd-rental-lakehouse/bronze/staff/';
+ROW FORMAT SERDE 'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
+STORED AS INPUTFORMAT 'org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat'
+OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat'
+LOCATION 's3://dvd-rental-lakehouse/bronze/default/staff/'
+TBLPROPERTIES ('classification'='hudi');
 
 -- Table: store
-CREATE EXTERNAL TABLE IF NOT EXISTS `dvdrental_bronze`.`store` (
-  `_hoodie_commit_time` string,
-  `_hoodie_commit_seqno` string,
-  `_hoodie_record_key` string,
-  `_hoodie_partition_path` string,
-  `_hoodie_file_name` string,
-  `store_id` int,
-  `manager_staff_id` int,
-  `address_id` int,
-  `last_update` string,
-  `__ts_ms` bigint
+CREATE EXTERNAL TABLE IF NOT EXISTS `default`.`store` (
+  `_hoodie_commit_time` STRING,
+  `_hoodie_commit_seqno` STRING,
+  `_hoodie_record_key` STRING,
+  `_hoodie_partition_path` STRING,
+  `_hoodie_file_name` STRING,
+  `store_id` INT,
+  `manager_staff_id` INT,
+  `address_id` INT,
+  `last_update` STRING,
+  `__ts_ms` BIGINT,
+  `__op` STRING,
+  `__deleted` STRING
 )
-ROW FORMAT SERDE
-  'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
-STORED AS INPUTFORMAT
-  'org.apache.hudi.hadoop.HoodieParquetInputFormat'
-OUTPUTFORMAT
-  'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat'
-LOCATION
-  's3://dvd-rental-lakehouse/bronze/store/';
+ROW FORMAT SERDE 'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
+STORED AS INPUTFORMAT 'org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat'
+OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat'
+LOCATION 's3://dvd-rental-lakehouse/bronze/default/store/'
+TBLPROPERTIES ('classification'='hudi');
+
+-- ============================================================
+-- Verification query: compare row counts across all tables
+-- ============================================================
+-- SELECT 'actor' as tbl, COUNT(*) as cnt FROM default.actor WHERE __deleted IS NULL OR __deleted != 'true'
+-- UNION ALL SELECT 'address', COUNT(*) FROM default.address WHERE __deleted IS NULL OR __deleted != 'true'
+-- UNION ALL SELECT 'category', COUNT(*) FROM default.category WHERE __deleted IS NULL OR __deleted != 'true'
+-- UNION ALL SELECT 'city', COUNT(*) FROM default.city WHERE __deleted IS NULL OR __deleted != 'true'
+-- UNION ALL SELECT 'country', COUNT(*) FROM default.country WHERE __deleted IS NULL OR __deleted != 'true'
+-- UNION ALL SELECT 'customer', COUNT(*) FROM default.customer WHERE __deleted IS NULL OR __deleted != 'true'
+-- UNION ALL SELECT 'film', COUNT(*) FROM default.film WHERE __deleted IS NULL OR __deleted != 'true'
+-- UNION ALL SELECT 'film_actor', COUNT(*) FROM default.film_actor WHERE __deleted IS NULL OR __deleted != 'true'
+-- UNION ALL SELECT 'film_category', COUNT(*) FROM default.film_category WHERE __deleted IS NULL OR __deleted != 'true'
+-- UNION ALL SELECT 'inventory', COUNT(*) FROM default.inventory WHERE __deleted IS NULL OR __deleted != 'true'
+-- UNION ALL SELECT 'language', COUNT(*) FROM default.language WHERE __deleted IS NULL OR __deleted != 'true'
+-- UNION ALL SELECT 'payment', COUNT(*) FROM default.payment WHERE __deleted IS NULL OR __deleted != 'true'
+-- UNION ALL SELECT 'rental', COUNT(*) FROM default.rental WHERE __deleted IS NULL OR __deleted != 'true'
+-- UNION ALL SELECT 'staff', COUNT(*) FROM default.staff WHERE __deleted IS NULL OR __deleted != 'true'
+-- UNION ALL SELECT 'store', COUNT(*) FROM default.store WHERE __deleted IS NULL OR __deleted != 'true';

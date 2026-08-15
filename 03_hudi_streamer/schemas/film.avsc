@@ -16,6 +16,8 @@
     {"name": "last_update",       "type": ["null", "string"], "default": null},
     {"name": "special_features",  "type": ["null", {"type": "array", "items": "string"}], "default": null},
     {"name": "fulltext",          "type": ["null", "string"], "default": null},
-    {"name": "__ts_ms",           "type": ["null", "long"],   "default": null}
+    {"name": "__ts_ms",           "type": ["null", "long"],   "default": null},
+    {"name": "__op",              "type": ["null", "string"],  "default": null},
+    {"name": "__deleted",         "type": ["null", "string"],  "default": null}
   ]
 }

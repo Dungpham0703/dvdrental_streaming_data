@@ -11,6 +11,8 @@
     {"name": "postal_code",  "type": ["null", "string"], "default": null},
     {"name": "phone",        "type": ["null", "string"], "default": null},
     {"name": "last_update",  "type": ["null", "string"], "default": null},
-    {"name": "__ts_ms",      "type": ["null", "long"],   "default": null}
+    {"name": "__ts_ms",      "type": ["null", "long"],   "default": null},
+    {"name": "__op",         "type": ["null", "string"],  "default": null},
+    {"name": "__deleted",    "type": ["null", "string"],  "default": null}
   ]
 }

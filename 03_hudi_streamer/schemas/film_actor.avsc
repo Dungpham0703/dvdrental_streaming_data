@@ -6,6 +6,8 @@
     {"name": "actor_id",    "type": "int"},
     {"name": "film_id",     "type": "int"},
     {"name": "last_update", "type": ["null", "string"], "default": null},
-    {"name": "__ts_ms",     "type": ["null", "long"],   "default": null}
+    {"name": "__ts_ms",     "type": ["null", "long"],   "default": null},
+    {"name": "__op",        "type": ["null", "string"],  "default": null},
+    {"name": "__deleted",   "type": ["null", "string"],  "default": null}
   ]
 }

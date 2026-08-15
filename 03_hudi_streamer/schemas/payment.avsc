@@ -10,6 +10,8 @@
     {"name": "amount",        "type": ["null", "string"], "default": null},
     {"name": "payment_date",  "type": ["null", "string"], "default": null},
     {"name": "last_update",   "type": ["null", "string"], "default": null},
-    {"name": "__ts_ms",       "type": ["null", "long"],   "default": null}
+    {"name": "__ts_ms",       "type": ["null", "long"],   "default": null},
+    {"name": "__op",          "type": ["null", "string"],  "default": null},
+    {"name": "__deleted",     "type": ["null", "string"],  "default": null}
   ]
 }
