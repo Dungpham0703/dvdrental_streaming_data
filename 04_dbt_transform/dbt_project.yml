@@ -1,0 +1,34 @@
+name: "dvdrental_lakehouse"
+version: "1.0.0"
+profile: "dvdrental_athena_dzung"
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+snapshot-paths: ["snapshots"]
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  dvdrental_lakehouse:
+    staging:
+      +materialized: table
+      +table_type: iceberg
+      +format: parquet
+      +tags: ["silver"]
+      +schema: dvdrental_staging
+    mart:
+      +materialized: table
+      +table_type: iceberg
+      +format: parquet
+      +tags: ["gold"]
+      +schema: dvdrental_mart
+
+seeds:
+  dvdrental_lakehouse:
+    +schema: dvdrental_mart
+    +table_type: iceberg
+
+snapshots:
+  dvdrental_lakehouse:
+    +table_type: iceberg
+    +strategy: timestamp
+    +schema: dvdrental_staging

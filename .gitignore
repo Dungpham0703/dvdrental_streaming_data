@@ -4,4 +4,10 @@
 .DS_Store
 .vscode/
 src/__pycache__
-TROUBLESHOOTING_CDC_HUDI.md
+
+dbt_packages
+logs
+target/
+.user.yml
+profiles.yml
+package-lock.yml
