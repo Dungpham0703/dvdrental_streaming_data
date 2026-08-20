@@ -26,7 +26,9 @@ selected_columns_payment as (
 filtered_payment as (
     select *
     from selected_columns_payment
-    where __deleted = false or __deleted is null
+    where (__deleted = false or __deleted is null)
+      and amount > 0
+      and rental_id in (select rental_id from {{ ref('stg_rental') }})
 ),
 
 deduplicate_payment as (

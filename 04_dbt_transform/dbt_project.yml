@@ -14,13 +14,17 @@ models:
       +table_type: iceberg
       +format: parquet
       +tags: ["silver"]
-      +schema: dvdrental_staging
+      +schema: staging
+    intermediate:
+      +materialized: view
+      +tags: ["silver"]
+      +schema: intermediate
     mart:
       +materialized: table
       +table_type: iceberg
       +format: parquet
       +tags: ["gold"]
-      +schema: dvdrental_mart
+      +schema: mart
 
 seeds:
   dvdrental_lakehouse:
@@ -31,4 +35,8 @@ snapshots:
   dvdrental_lakehouse:
     +table_type: iceberg
     +strategy: timestamp
-    +schema: dvdrental_staging
+    +schema: dvdrental_snapshot
+
+tests:
+  +store_failures: true
+  +schema: audit

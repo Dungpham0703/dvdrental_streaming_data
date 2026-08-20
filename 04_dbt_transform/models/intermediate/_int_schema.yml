@@ -1,0 +1,16 @@
+version: 2
+
+models:
+  - name: int_full_address
+    description: "Denormalized address view joining address + city + country"
+    columns:
+      - name: address_id
+        description: "Primary key — from stg_address"
+        tests: [unique, not_null]
+
+  - name: int_film_details
+    description: "Enriched film view with language and category names"
+    columns:
+      - name: film_id
+        description: "Primary key — from stg_film"
+        tests: [unique, not_null]

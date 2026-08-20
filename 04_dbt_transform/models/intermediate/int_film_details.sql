@@ -12,6 +12,16 @@ film_categories as (
 
 categories as (
     select * from {{ ref('stg_category') }}
+),
+
+film_category_agg as (
+    select
+        fc.film_id,
+        array_join(array_agg(distinct c.category_name), ', ') as category_name
+    from film_categories fc
+    left join categories c
+        on fc.category_id = c.category_id
+    group by fc.film_id
 )
 
 select
@@ -20,7 +30,7 @@ select
     f.description,
     f.release_year,
     l.language_name,
-    c.category_name,
+    coalesce(fca.category_name, 'Uncategorized') as category_name,
     f.rental_duration,
     f.rental_rate,
     f.film_length_minutes,
@@ -31,7 +41,5 @@ select
 from films f
 left join languages l
     on f.language_id = l.language_id
-left join film_categories fc
-    on f.film_id = fc.film_id
-left join categories c
-    on fc.category_id = c.category_id
+left join film_category_agg fca
+    on f.film_id = fca.film_id

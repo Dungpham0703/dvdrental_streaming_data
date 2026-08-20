@@ -27,7 +27,9 @@ selected_columns_rental as (
 filtered_rental as (
     select *
     from selected_columns_rental
-    where __deleted = false or __deleted is null
+    where (__deleted = false or __deleted is null)
+      and (rental_date is null or rental_date <= {{ current_timestamp_iso() }})
+      and (return_date is null or return_date >= rental_date)
 ),
 
 deduplicate_rental as (

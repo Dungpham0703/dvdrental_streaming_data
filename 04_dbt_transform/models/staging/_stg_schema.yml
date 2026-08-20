@@ -1,0 +1,250 @@
+version: 2
+
+models:
+  - name: stg_actor
+    description: "Cleaned and deduplicated actor records from CDC stream"
+    columns:
+      - name: actor_id
+        description: "Primary key"
+        tests: [unique, not_null]
+
+  - name: stg_address
+    description: "Cleaned and deduplicated address records from CDC stream"
+    columns:
+      - name: address_id
+        description: "Primary key"
+        tests: [unique, not_null]
+      - name: city_id
+        description: "FK to stg_city"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_city')
+              field: city_id
+
+  - name: stg_category
+    description: "Cleaned and deduplicated category records from CDC stream"
+    columns:
+      - name: category_id
+        description: "Primary key"
+        tests: [unique, not_null]
+
+  - name: stg_city
+    description: "Cleaned and deduplicated city records from CDC stream"
+    columns:
+      - name: city_id
+        description: "Primary key"
+        tests: [unique, not_null]
+      - name: country_id
+        description: "FK to stg_country"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_country')
+              field: country_id
+
+  - name: stg_country
+    description: "Cleaned and deduplicated country records from CDC stream"
+    columns:
+      - name: country_id
+        description: "Primary key"
+        tests: [unique, not_null]
+
+  - name: stg_customer
+    description: "Cleaned and deduplicated customer records from CDC stream"
+    columns:
+      - name: customer_id
+        description: "Primary key"
+        tests: [unique, not_null]
+      - name: store_id
+        description: "FK to stg_store"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_store')
+              field: store_id
+      - name: address_id
+        description: "FK to stg_address"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_address')
+              field: address_id
+      - name: email
+        tests: [not_null]
+
+  - name: stg_film
+    description: "Cleaned and deduplicated film records from CDC stream"
+    columns:
+      - name: film_id
+        description: "Primary key"
+        tests: [unique, not_null]
+      - name: language_id
+        description: "FK to stg_language"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_language')
+              field: language_id
+      - name: title
+        tests: [not_null]
+
+  - name: stg_film_actor
+    description: "Bridge table between films and actors"
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - film_id
+            - actor_id
+    columns:
+      - name: film_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_film')
+              field: film_id
+      - name: actor_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_actor')
+              field: actor_id
+
+  - name: stg_film_category
+    description: "Bridge table between films and categories"
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - film_id
+            - category_id
+    columns:
+      - name: film_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_film')
+              field: film_id
+      - name: category_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_category')
+              field: category_id
+
+  - name: stg_inventory
+    description: "Cleaned and deduplicated inventory records from CDC stream"
+    columns:
+      - name: inventory_id
+        description: "Primary key"
+        tests: [unique, not_null]
+      - name: film_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_film')
+              field: film_id
+      - name: store_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_store')
+              field: store_id
+
+  - name: stg_language
+    description: "Cleaned and deduplicated language records from CDC stream"
+    columns:
+      - name: language_id
+        description: "Primary key"
+        tests: [unique, not_null]
+
+  - name: stg_payment
+    description: "Cleaned and deduplicated payment records from CDC stream"
+    columns:
+      - name: payment_id
+        description: "Primary key"
+        tests: [unique, not_null]
+      - name: customer_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_customer')
+              field: customer_id
+      - name: staff_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_staff')
+              field: staff_id
+      - name: rental_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_rental')
+              field: rental_id
+      - name: amount
+        tests: [not_null]
+
+  - name: stg_rental
+    description: "Cleaned and deduplicated rental transactions from CDC stream"
+    columns:
+      - name: rental_id
+        description: "Primary key"
+        tests: [unique, not_null]
+      - name: customer_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_customer')
+              field: customer_id
+      - name: inventory_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_inventory')
+              field: inventory_id
+      - name: staff_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_staff')
+              field: staff_id
+      - name: rental_date
+        tests: [not_null]
+
+  - name: stg_staff
+    description: "Cleaned and deduplicated staff records from CDC stream"
+    columns:
+      - name: staff_id
+        description: "Primary key"
+        tests: [unique, not_null]
+      - name: store_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_store')
+              field: store_id
+      - name: address_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_address')
+              field: address_id
+
+  - name: stg_store
+    description: "Cleaned and deduplicated store records from CDC stream"
+    columns:
+      - name: store_id
+        description: "Primary key"
+        tests: [unique, not_null]
+      - name: manager_staff_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_staff')
+              field: staff_id
+      - name: address_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_address')
+              field: address_id

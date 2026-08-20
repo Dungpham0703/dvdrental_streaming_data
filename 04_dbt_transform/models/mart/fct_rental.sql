@@ -25,7 +25,7 @@ final as (
         r.staff_id,
         case
             when r.return_date is not null
-            then date_diff('day', cast(r.rental_date as date), cast(r.return_date as date))
+            then date_diff('day', cast({{ parse_iso_timestamp('r.rental_date') }} as date), cast({{ parse_iso_timestamp('r.return_date') }} as date))
             else null
         end as rental_duration_days
     from rentals r

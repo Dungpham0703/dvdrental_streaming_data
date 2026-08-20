@@ -4,8 +4,8 @@
     config(
         target_schema='dvdrental_staging',
         unique_key='customer_id',
-        strategy='timestamp',
-        updated_at='last_update',
+        strategy='check',
+        check_cols='all',
         table_type='iceberg'
     )
 }}
