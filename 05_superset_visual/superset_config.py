@@ -1,0 +1,7 @@
+import os
+
+SECRET_KEY = os.environ.get("SUPERSET_SECRET_KEY")
+
+SQLALCHEMY_DATABASE_URI = os.environ.get("SQLALCHEMY_DATABASE_URI")
+
+SQL_MAX_ROW = 50000
