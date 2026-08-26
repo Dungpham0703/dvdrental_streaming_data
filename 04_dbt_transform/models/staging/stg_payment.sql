@@ -1,12 +1,17 @@
 {{
     config(
-        materialized='table',
-        unique_key='payment_id'
+        materialized='incremental',
+        incremental_strategy='merge',
+        unique_key='payment_id',
+        on_schema_change='sync_all_columns'
     )
 }}
 
 with raw_payment as (
     select * from {{ source('raw', 'payment') }}
+    {% if is_incremental() %}
+    where {{ debezium_ts_milies('__ts_ms') }} > (select max(cdc_capture_at) from {{ this }})
+    {% endif %}
 ),
 
 selected_columns_payment as (
@@ -43,6 +48,7 @@ select
     staff_id,
     rental_id,
     amount,
-    payment_date
+    payment_date,
+    cdc_capture_at
 from deduplicate_payment
 where dup_rank = 1

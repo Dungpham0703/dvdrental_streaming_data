@@ -31,7 +31,7 @@ services:
     environment:
       SUPERSET_CONFIG_PATH: "/app/pythonpath/superset_config.py"
       SUPERSET_SECRET_KEY: "${SUPERSET_SECRET_KEY}"
-      SQLALCHEMY_DATABASE_URI: "postgresql://superset:superset_password@superset-db:5432/superset"
+      SQLALCHEMY_DATABASE_URI: "${SQLALCHEMY_DATABASE_URI}"
     volumes:
       - ./superset_config.py:/app/pythonpath/superset_config.py
     depends_on:

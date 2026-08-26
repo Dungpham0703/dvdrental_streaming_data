@@ -1,12 +1,17 @@
 {{
     config(
-        materialized='table',
-        unique_key='rental_id'
+        materialized='incremental',
+        incremental_strategy='merge',
+        unique_key='rental_id',
+        on_schema_change='sync_all_columns'
     )
 }}
 
 with raw_rental as (
     select * from {{ source('raw', 'rental') }}
+    {% if is_incremental() %}
+    where {{ debezium_ts_milies('__ts_ms') }} > (select max(cdc_capture_at) from {{ this }})
+    {% endif %}
 ),
 
 selected_columns_rental as (
