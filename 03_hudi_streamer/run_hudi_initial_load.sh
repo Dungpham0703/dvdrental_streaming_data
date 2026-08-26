@@ -1,3 +1,4 @@
+#!/bin/bash
 set -euo pipefail
 
 echo '============================================================'
@@ -25,14 +26,14 @@ echo ''
   --executor-memory 2g \
   --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
   --conf spark.sql.hive.convertMetastoreParquet=false \
-  --conf spark.hadoop.fs.s3a.access.key=${AWS_ACCESS_KEY_ID} \
-  --conf spark.hadoop.fs.s3a.secret.key=${AWS_SECRET_ACCESS_KEY} \
-  --conf spark.hadoop.fs.s3a.endpoint=s3.${AWS_REGION}.amazonaws.com \
+  --conf spark.hadoop.fs.s3a.access.key="${AWS_ACCESS_KEY_ID}" \
+  --conf spark.hadoop.fs.s3a.secret.key="${AWS_SECRET_ACCESS_KEY}" \
+  --conf spark.hadoop.fs.s3a.endpoint=s3."${AWS_REGION}".amazonaws.com \
   --conf spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem \
   --conf spark.hadoop.fs.s3a.path.style.access=true \
   /opt/spark/jars/spark-core_2.12-3.5.0.jar \
   --config-folder /opt/hudi-configs/tables \
-  --base-path-prefix s3a://${S3_BUCKET_NAME}/bronze/ \
+  --base-path-prefix s3a://"${S3_BUCKET_NAME}"/bronze/ \
   --props file:///tmp/common.properties \
   --source-class org.apache.hudi.utilities.sources.JsonKafkaSource \
   --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider \
@@ -62,14 +63,14 @@ echo ''
   --executor-memory 2g \
   --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
   --conf spark.sql.hive.convertMetastoreParquet=false \
-  --conf spark.hadoop.fs.s3a.access.key=${AWS_ACCESS_KEY_ID} \
-  --conf spark.hadoop.fs.s3a.secret.key=${AWS_SECRET_ACCESS_KEY} \
-  --conf spark.hadoop.fs.s3a.endpoint=s3.${AWS_REGION}.amazonaws.com \
+  --conf spark.hadoop.fs.s3a.access.key="${AWS_ACCESS_KEY_ID}" \
+  --conf spark.hadoop.fs.s3a.secret.key="${AWS_SECRET_ACCESS_KEY}" \
+  --conf spark.hadoop.fs.s3a.endpoint=s3."${AWS_REGION}".amazonaws.com \
   --conf spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem \
   --conf spark.hadoop.fs.s3a.path.style.access=true \
   /opt/spark/jars/spark-core_2.12-3.5.0.jar \
   --config-folder /opt/hudi-configs/tables \
-  --base-path-prefix s3a://${S3_BUCKET_NAME}/bronze/ \
+  --base-path-prefix s3a://"${S3_BUCKET_NAME}"/bronze/ \
   --props file:///tmp/common.properties \
   --source-class org.apache.hudi.utilities.sources.JsonKafkaSource \
   --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider \

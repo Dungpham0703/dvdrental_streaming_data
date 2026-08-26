@@ -18,18 +18,24 @@ TARGET_SIZE_GB = int(os.environ.get("TARGET_SIZE_GB", "100"))
 NUM_WORKERS = int(os.environ.get("NUM_WORKERS", "4"))
 BATCH_SIZE = int(os.environ.get("BATCH_SIZE", "5000"))
 
+
 def get_connection():
-    conn = psycopg2.connect(host=DB_HOST, port=DB_PORT, dbname=DB_NAME, user=DB_USER, password=DB_PASS)
+    conn = psycopg2.connect(
+        host=DB_HOST, port=DB_PORT, dbname=DB_NAME, user=DB_USER, password=DB_PASS
+    )
     conn.autocommit = True
     return conn
+
 
 def fetch_ids(cur, table, column):
     cur.execute(f"SELECT {column} FROM {table}")
     return [row[0] for row in cur.fetchall()]
 
+
 def get_db_size_gb(cur):
     cur.execute(f"SELECT pg_database_size('{DB_NAME}') / (1024.0 * 1024 * 1024)")
     return cur.fetchone()[0]
+
 
 def upscale_smallint_columns():
     print("=" * 60)
@@ -66,6 +72,7 @@ def upscale_smallint_columns():
         print(f"  Upgraded {len(columns_to_alter)} columns.")
     print("Phase 0 complete!")
 
+
 def seed_dimensions():
     print("=" * 60)
     print("PHASE 1: Seeding dimension tables")
@@ -76,69 +83,96 @@ def seed_dimensions():
 
     print("Generating 100 countries...")
     country_data = [(fake.country()[:50],) for _ in range(100)]
-    psycopg2.extras.execute_values(cur, "INSERT INTO country (country) VALUES %s", country_data)
+    psycopg2.extras.execute_values(
+        cur, "INSERT INTO country (country) VALUES %s", country_data
+    )
 
     print("Generating 1,000 cities...")
     country_ids = fetch_ids(cur, "country", "country_id")
     city_data = [(fake.city()[:50], random.choice(country_ids)) for _ in range(1000)]
-    psycopg2.extras.execute_values(cur, "INSERT INTO city (city, country_id) VALUES %s", city_data)
+    psycopg2.extras.execute_values(
+        cur, "INSERT INTO city (city, country_id) VALUES %s", city_data
+    )
 
     print("Generating 5,000 addresses...")
     city_ids = fetch_ids(cur, "city", "city_id")
     address_data = []
     for _ in range(5000):
-        address_data.append((
-            fake.street_address()[:50],
-            fake.state()[:20],
-            random.choice(city_ids),
-            fake.postcode()[:10],
-            fake.phone_number()[:20]
-        ))
-    psycopg2.extras.execute_values(cur, "INSERT INTO address (address, district, city_id, postal_code, phone) VALUES %s", address_data, page_size=2000)
+        address_data.append(
+            (
+                fake.street_address()[:50],
+                fake.state()[:20],
+                random.choice(city_ids),
+                fake.postcode()[:10],
+                fake.phone_number()[:20],
+            )
+        )
+    psycopg2.extras.execute_values(
+        cur,
+        "INSERT INTO address (address, district, city_id, postal_code, phone) VALUES %s",
+        address_data,
+        page_size=2000,
+    )
 
     print("Generating 5,000 actors...")
     actor_data = [(fake.first_name()[:45], fake.last_name()[:45]) for _ in range(5000)]
-    psycopg2.extras.execute_values(cur, "INSERT INTO actor (first_name, last_name) VALUES %s", actor_data, page_size=2000)
+    psycopg2.extras.execute_values(
+        cur,
+        "INSERT INTO actor (first_name, last_name) VALUES %s",
+        actor_data,
+        page_size=2000,
+    )
 
     print("Generating 5,000 films...")
     language_ids = fetch_ids(cur, "language", "language_id")
     film_data = []
     for _ in range(5000):
-        film_data.append((
-            fake.catch_phrase()[:255],
-            fake.text(max_nb_chars=200),
-            random.randint(1990, 2026),
-            random.choice(language_ids),
-            random.randint(3, 7),
-            round(random.uniform(0.99, 4.99), 2),
-            random.randint(60, 185),
-            round(random.uniform(9.99, 29.99), 2),
-            random.choice(['G', 'PG', 'PG-13', 'R', 'NC-17'])
-        ))
-    psycopg2.extras.execute_values(cur,
+        film_data.append(
+            (
+                fake.catch_phrase()[:255],
+                fake.text(max_nb_chars=200),
+                random.randint(1990, 2026),
+                random.choice(language_ids),
+                random.randint(3, 7),
+                round(random.uniform(0.99, 4.99), 2),
+                random.randint(60, 185),
+                round(random.uniform(9.99, 29.99), 2),
+                random.choice(["G", "PG", "PG-13", "R", "NC-17"]),
+            )
+        )
+    psycopg2.extras.execute_values(
+        cur,
         "INSERT INTO film (title, description, release_year, language_id, rental_duration, rental_rate, length, replacement_cost, rating) VALUES %s",
-        film_data, page_size=2000)
+        film_data,
+        page_size=2000,
+    )
 
     print("Generating 50,000 customers...")
     store_ids = fetch_ids(cur, "store", "store_id")
     address_ids = fetch_ids(cur, "address", "address_id")
     customer_data = []
     for _ in range(50000):
-        customer_data.append((
-            random.choice(store_ids),
-            fake.first_name()[:45],
-            fake.last_name()[:45],
-            fake.email()[:50],
-            random.choice(address_ids),
-            True
-        ))
-    psycopg2.extras.execute_values(cur,
+        customer_data.append(
+            (
+                random.choice(store_ids),
+                fake.first_name()[:45],
+                fake.last_name()[:45],
+                fake.email()[:50],
+                random.choice(address_ids),
+                True,
+            )
+        )
+    psycopg2.extras.execute_values(
+        cur,
         "INSERT INTO customer (store_id, first_name, last_name, email, address_id, activebool) VALUES %s",
-        customer_data, page_size=5000)
+        customer_data,
+        page_size=5000,
+    )
 
     print("Phase 1 complete!")
     cur.close()
     conn.close()
+
 
 def seed_bridge_tables():
     print("=" * 60)
@@ -154,28 +188,39 @@ def seed_bridge_tables():
     print("Generating film_actor relationships (3-8 actors per film)...")
     film_actor_data = set()
     for film_id in film_ids:
-        selected_actors = random.sample(actor_ids, min(random.randint(3, 8), len(actor_ids)))
+        selected_actors = random.sample(
+            actor_ids, min(random.randint(3, 8), len(actor_ids))
+        )
         for actor_id in selected_actors:
             film_actor_data.add((actor_id, film_id))
-    psycopg2.extras.execute_values(cur,
+    psycopg2.extras.execute_values(
+        cur,
         "INSERT INTO film_actor (actor_id, film_id) VALUES %s ON CONFLICT DO NOTHING",
-        list(film_actor_data), page_size=5000)
+        list(film_actor_data),
+        page_size=5000,
+    )
     print(f"  -> Created {len(film_actor_data)} film_actor records")
 
     print("Generating film_category relationships (1-2 categories per film)...")
     film_category_data = set()
     for film_id in film_ids:
-        selected_cats = random.sample(category_ids, min(random.randint(1, 2), len(category_ids)))
+        selected_cats = random.sample(
+            category_ids, min(random.randint(1, 2), len(category_ids))
+        )
         for cat_id in selected_cats:
             film_category_data.add((film_id, cat_id))
-    psycopg2.extras.execute_values(cur,
+    psycopg2.extras.execute_values(
+        cur,
         "INSERT INTO film_category (film_id, category_id) VALUES %s ON CONFLICT DO NOTHING",
-        list(film_category_data), page_size=5000)
+        list(film_category_data),
+        page_size=5000,
+    )
     print(f"  -> Created {len(film_category_data)} film_category records")
 
     print("Phase 2 complete!")
     cur.close()
     conn.close()
+
 
 def seed_inventory():
     print("=" * 60)
@@ -192,19 +237,24 @@ def seed_inventory():
         for store_id in store_ids:
             for _ in range(random.randint(2, 5)):
                 inventory_data.append((film_id, store_id))
-    psycopg2.extras.execute_values(cur,
+    psycopg2.extras.execute_values(
+        cur,
         "INSERT INTO inventory (film_id, store_id) VALUES %s",
-        inventory_data, page_size=5000)
+        inventory_data,
+        page_size=5000,
+    )
 
     print(f"  -> Created {len(inventory_data)} inventory items")
     print("Phase 3 complete!")
     cur.close()
     conn.close()
 
+
 def random_date():
     # Fast random date in 2026
     t = random.randint(1767225600, 1798761600)
-    return time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(t))
+    return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(t))
+
 
 def blast_transactions(worker_id, batch_size, target_gb):
     conn = get_connection()
@@ -215,7 +265,9 @@ def blast_transactions(worker_id, batch_size, target_gb):
     inventory_ids = fetch_ids(cur, "inventory", "inventory_id")
     rental_ids = fetch_ids(cur, "rental", "rental_id")
 
-    print(f"Worker {worker_id}: Started | FK pools -> customers={len(customer_ids)}, inventory={len(inventory_ids)}, rentals={len(rental_ids)}")
+    print(
+        f"Worker {worker_id}: Started | FK pools -> customers={len(customer_ids)}, inventory={len(inventory_ids)}, rentals={len(rental_ids)}"
+    )
 
     total_inserted = 0
     start_time = time.time()
@@ -226,35 +278,47 @@ def blast_transactions(worker_id, batch_size, target_gb):
                 current_gb = get_db_size_gb(cur)
                 elapsed = time.time() - start_time
                 rate = total_inserted / elapsed if elapsed > 0 else 0
-                print(f"Worker {worker_id}: {total_inserted:,} rows | DB: {current_gb:.2f} GB / {target_gb} GB | {rate:.0f} rows/sec")
+                print(
+                    f"Worker {worker_id}: {total_inserted:,} rows | DB: {current_gb:.2f} GB / {target_gb} GB | {rate:.0f} rows/sec"
+                )
                 if current_gb >= target_gb:
                     print(f"Worker {worker_id}: Target reached! Stopping.")
                     break
 
             rental_data = []
             for _ in range(batch_size):
-                rental_data.append((
-                    random_date(),
-                    random.choice(inventory_ids),
-                    random.choice(customer_ids),
-                    random.choice(staff_ids)
-                ))
-            psycopg2.extras.execute_values(cur,
+                rental_data.append(
+                    (
+                        random_date(),
+                        random.choice(inventory_ids),
+                        random.choice(customer_ids),
+                        random.choice(staff_ids),
+                    )
+                )
+            psycopg2.extras.execute_values(
+                cur,
                 "INSERT INTO rental (rental_date, inventory_id, customer_id, staff_id) VALUES %s ON CONFLICT DO NOTHING",
-                rental_data, page_size=5000)
+                rental_data,
+                page_size=5000,
+            )
 
             payment_data = []
             for _ in range(batch_size):
-                payment_data.append((
-                    random.choice(customer_ids),
-                    random.choice(staff_ids),
-                    random.choice(rental_ids),
-                    round(random.uniform(0.99, 9.99), 2),
-                    random_date()
-                ))
-            psycopg2.extras.execute_values(cur,
+                payment_data.append(
+                    (
+                        random.choice(customer_ids),
+                        random.choice(staff_ids),
+                        random.choice(rental_ids),
+                        round(random.uniform(0.99, 9.99), 2),
+                        random_date(),
+                    )
+                )
+            psycopg2.extras.execute_values(
+                cur,
                 "INSERT INTO payment (customer_id, staff_id, rental_id, amount, payment_date) VALUES %s ON CONFLICT DO NOTHING",
-                payment_data, page_size=5000)
+                payment_data,
+                page_size=5000,
+            )
 
             total_inserted += batch_size * 2
 
@@ -266,6 +330,7 @@ def blast_transactions(worker_id, batch_size, target_gb):
     cur.close()
     conn.close()
     print(f"Worker {worker_id}: Done! Total: {total_inserted:,} rows")
+
 
 if __name__ == "__main__":
     print("=" * 60)
@@ -291,7 +356,9 @@ if __name__ == "__main__":
 
     processes = []
     for i in range(NUM_WORKERS):
-        p = multiprocessing.Process(target=blast_transactions, args=(i, BATCH_SIZE, TARGET_SIZE_GB))
+        p = multiprocessing.Process(
+            target=blast_transactions, args=(i, BATCH_SIZE, TARGET_SIZE_GB)
+        )
         p.start()
         processes.append(p)
 

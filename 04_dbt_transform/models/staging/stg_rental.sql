@@ -15,7 +15,7 @@ with raw_rental as (
 ),
 
 selected_columns_rental as (
-    select 
+    select
         rental_id,
         customer_id,
         inventory_id,
@@ -43,7 +43,7 @@ deduplicate_rental as (
     from filtered_rental
 )
 
-select 
+select
     rental_id,
     customer_id,
     inventory_id,

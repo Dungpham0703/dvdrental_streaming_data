@@ -1,7 +1,7 @@
 # Real-Time E-Commerce Analytics Lakehouse (CDC & Medallion Architecture)
 
-> **Architected & Implemented by:** Dung Pham  
-> **Repository:** [dvdrental_streaming_data](https://github.com/Dungpham0703/dvdrental_streaming_data)  
+> **Architected & Implemented by:** Dung Pham
+> **Repository:** [dvdrental_streaming_data](https://github.com/Dungpham0703/dvdrental_streaming_data)
 > **Tech Stack:** AWS RDS PostgreSQL, Debezium Connect, Apache Kafka, Apache Hudi, AWS S3, AWS Glue Data Catalog, dbt (dbt-athena), AWS Athena, Docker, GitHub Actions CI/CD
 
 ---
