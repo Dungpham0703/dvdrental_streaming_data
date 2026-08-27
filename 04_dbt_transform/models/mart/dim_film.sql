@@ -1,7 +1,7 @@
 {{
     config(
         materialized='table',
-        unique_key='film_key'
+        unique_key='film_id'
     )
 }}
 
@@ -19,7 +19,6 @@ actor_counts as (
 
 final as (
     select
-        {{ dbt_utils.generate_surrogate_key(['fd.film_id']) }} as film_key,
         fd.film_id,
         fd.title,
         fd.description,

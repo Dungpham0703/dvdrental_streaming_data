@@ -16,11 +16,8 @@ models:
   - name: dim_film
     description: "Film dimension with language, category, and actor count"
     columns:
-      - name: film_key
-        description: "Surrogate key"
-        tests: [unique, not_null]
       - name: film_id
-        description: "Natural key"
+        description: "Primary key"
         tests: [unique, not_null]
       - name: title
         tests: [not_null]
@@ -28,41 +25,29 @@ models:
   - name: dim_store
     description: "Store dimension with denormalized address and manager name"
     columns:
-      - name: store_key
-        description: "Surrogate key"
-        tests: [unique, not_null]
       - name: store_id
-        description: "Natural key"
+        description: "Primary key"
         tests: [unique, not_null]
 
   - name: dim_staff
     description: "Staff dimension with denormalized address"
     columns:
-      - name: staff_key
-        description: "Surrogate key"
-        tests: [unique, not_null]
       - name: staff_id
-        description: "Natural key"
+        description: "Primary key"
         tests: [unique, not_null]
 
   - name: dim_actor
     description: "Actor dimension with film count"
     columns:
-      - name: actor_key
-        description: "Surrogate key"
-        tests: [unique, not_null]
       - name: actor_id
-        description: "Natural key"
+        description: "Primary key"
         tests: [unique, not_null]
 
   - name: fct_rental
     description: "Rental fact table enriched with film_id, store_id, and computed rental duration"
     columns:
-      - name: rental_key
-        description: "Surrogate key"
-        tests: [unique, not_null]
       - name: rental_id
-        description: "Natural key"
+        description: "Primary key"
         tests: [unique, not_null]
       - name: customer_id
         tests:
@@ -82,11 +67,8 @@ models:
   - name: fct_payment
     description: "Payment fact table enriched with film_id and store_id"
     columns:
-      - name: payment_key
-        description: "Surrogate key"
-        tests: [unique, not_null]
       - name: payment_id
-        description: "Natural key"
+        description: "Primary key"
         tests: [unique, not_null]
       - name: customer_id
         tests:

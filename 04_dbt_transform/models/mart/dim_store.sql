@@ -1,7 +1,7 @@
 {{
     config(
         materialized='table',
-        unique_key='store_key'
+        unique_key='store_id'
     )
 }}
 
@@ -19,7 +19,6 @@ managers as (
 
 final as (
     select
-        {{ dbt_utils.generate_surrogate_key(['s.store_id']) }} as store_key,
         s.store_id,
         m.first_name as manager_first_name,
         m.last_name as manager_last_name,

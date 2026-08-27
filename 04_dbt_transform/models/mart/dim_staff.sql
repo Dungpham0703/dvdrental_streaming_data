@@ -1,7 +1,7 @@
 {{
     config(
         materialized='table',
-        unique_key='staff_key'
+        unique_key='staff_id'
     )
 }}
 
@@ -15,7 +15,6 @@ addresses as (
 
 final as (
     select
-        {{ dbt_utils.generate_surrogate_key(['st.staff_id']) }} as staff_key,
         st.staff_id,
         st.first_name,
         st.last_name,

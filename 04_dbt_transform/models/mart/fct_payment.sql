@@ -2,7 +2,7 @@
     config(
         materialized='incremental',
         incremental_strategy='merge',
-        unique_key='payment_key',
+        unique_key='payment_id',
         on_schema_change='sync_all_columns'
     )
 }}
@@ -24,7 +24,6 @@ inventory as (
 
 final as (
     select
-        {{ dbt_utils.generate_surrogate_key(['p.payment_id']) }} as payment_key,
         p.payment_id,
         p.customer_id,
         p.staff_id,

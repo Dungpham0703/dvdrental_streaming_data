@@ -2,7 +2,7 @@
     config(
         materialized='incremental',
         incremental_strategy='merge',
-        unique_key='rental_key',
+        unique_key='rental_id',
         on_schema_change='sync_all_columns'
     )
 }}
@@ -20,7 +20,6 @@ inventory as (
 
 final as (
     select
-        {{ dbt_utils.generate_surrogate_key(['r.rental_id']) }} as rental_key,
         r.rental_id,
         r.rental_date,
         r.return_date,
