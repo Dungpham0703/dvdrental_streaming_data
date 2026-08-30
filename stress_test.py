@@ -334,7 +334,7 @@ def blast_transactions(worker_id, batch_size, target_gb):
 
             elif op_roll <= OP_INSERT_PCT + OP_UPDATE_PCT:
                 update_rentals = random.sample(
-                    rental_ids, min(batch_size, len(rental_ids))
+                    rental_ids, min(50, batch_size, len(rental_ids))
                 )
                 cur.execute(
                     "UPDATE payment SET amount = ROUND((RANDOM() * 10)::numeric, 2) WHERE rental_id = ANY(%s)",
@@ -344,7 +344,7 @@ def blast_transactions(worker_id, batch_size, target_gb):
 
             else:
                 delete_rentals = random.sample(
-                    rental_ids, min(batch_size, len(rental_ids))
+                    rental_ids, min(50, batch_size, len(rental_ids))
                 )
                 cur.execute(
                     "DELETE FROM payment WHERE rental_id = ANY(%s)", (delete_rentals,)
@@ -386,6 +386,9 @@ if __name__ == "__main__":
     cur = conn.cursor()
     initial_size = get_db_size_gb(cur)
     print(f"Current DB size: {initial_size:.2f} GB")
+
+    print("Checking/creating index on payment(rental_id)...")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_payment_rental_id ON payment(rental_id)")
 
     cur.execute("SELECT COUNT(*) FROM customer")
     customer_count = cur.fetchone()[0]
