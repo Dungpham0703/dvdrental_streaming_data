@@ -17,6 +17,9 @@ DB_PASS = os.environ.get("DB_PASS", "postgres")
 TARGET_SIZE_GB = int(os.environ.get("TARGET_SIZE_GB", "100"))
 NUM_WORKERS = int(os.environ.get("NUM_WORKERS", "4"))
 BATCH_SIZE = int(os.environ.get("BATCH_SIZE", "5000"))
+OP_INSERT_PCT = int(os.environ.get("OP_INSERT_PCT", "60"))
+OP_UPDATE_PCT = int(os.environ.get("OP_UPDATE_PCT", "25"))
+OP_DELETE_PCT = int(os.environ.get("OP_DELETE_PCT", "15"))
 
 
 def get_connection():
@@ -288,42 +291,60 @@ def blast_transactions(worker_id, batch_size, target_gb):
                     print(f"Worker {worker_id}: Target reached! Stopping.")
                     break
 
-            rental_data = []
-            for _ in range(batch_size):
-                rental_data.append(
-                    (
-                        random_date(),
-                        random.choice(inventory_ids),
-                        random.choice(customer_ids),
-                        random.choice(staff_ids),
-                    )
-                )
-            psycopg2.extras.execute_values(
-                cur,
-                "INSERT INTO rental (rental_date, inventory_id, customer_id, staff_id) VALUES %s ON CONFLICT DO NOTHING",
-                rental_data,
-                page_size=5000,
-            )
+            op_roll = random.randint(1, 100)
 
-            payment_data = []
-            for _ in range(batch_size):
-                payment_data.append(
-                    (
-                        random.choice(customer_ids),
-                        random.choice(staff_ids),
-                        random.choice(rental_ids),
-                        round(random.uniform(0.99, 9.99), 2),
-                        random_date(),
+            if op_roll <= OP_INSERT_PCT:
+                rental_data = []
+                for _ in range(batch_size):
+                    rental_data.append(
+                        (
+                            random_date(),
+                            random.choice(inventory_ids),
+                            random.choice(customer_ids),
+                            random.choice(staff_ids),
+                        )
                     )
+                psycopg2.extras.execute_values(
+                    cur,
+                    "INSERT INTO rental (rental_date, inventory_id, customer_id, staff_id) VALUES %s ON CONFLICT DO NOTHING",
+                    rental_data,
+                    page_size=5000,
                 )
-            psycopg2.extras.execute_values(
-                cur,
-                "INSERT INTO payment (customer_id, staff_id, rental_id, amount, payment_date) VALUES %s ON CONFLICT DO NOTHING",
-                payment_data,
-                page_size=5000,
-            )
 
-            total_inserted += batch_size * 2
+                payment_data = []
+                for _ in range(batch_size):
+                    payment_data.append(
+                        (
+                            random.choice(customer_ids),
+                            random.choice(staff_ids),
+                            random.choice(rental_ids),
+                            round(random.uniform(0.99, 9.99), 2),
+                            random_date(),
+                        )
+                    )
+                psycopg2.extras.execute_values(
+                    cur,
+                    "INSERT INTO payment (customer_id, staff_id, rental_id, amount, payment_date) VALUES %s ON CONFLICT DO NOTHING",
+                    payment_data,
+                    page_size=5000,
+                )
+                total_inserted += batch_size * 2
+
+            elif op_roll <= OP_INSERT_PCT + OP_UPDATE_PCT:
+                update_rentals = random.sample(rental_ids, min(batch_size, len(rental_ids)))
+                cur.execute(
+                    "UPDATE payment SET amount = ROUND((RANDOM() * 10)::numeric, 2) WHERE rental_id = ANY(%s)",
+                    (update_rentals,)
+                )
+                total_inserted += cur.rowcount
+
+            else:
+                delete_rentals = random.sample(rental_ids, min(batch_size, len(rental_ids)))
+                cur.execute(
+                    "DELETE FROM payment WHERE rental_id = ANY(%s)",
+                    (delete_rentals,)
+                )
+                total_inserted += cur.rowcount
 
         except Exception as e:
             print(f"Worker {worker_id} Warning: Batch failed (retrying): {e}")
