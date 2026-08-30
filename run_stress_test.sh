@@ -14,7 +14,7 @@ echo "========================================================" | tee -a $LOG_FI
 while true; do
     echo "[$(date)] Launching stress_test.py..." | tee -a $LOG_FILE
 
-    python3 stress_test.py
+    python3 -u stress_test.py
 
     EXIT_CODE=$?
 
