@@ -33,7 +33,7 @@ def get_connection():
 
 
 def fetch_ids(cur, table, column, limit=100000):
-    query = f"SELECT {column} FROM {table}"
+    query = f"SELECT {column} FROM {table} ORDER BY {column} DESC"
     if limit:
         query += f" LIMIT {limit}"
     cur.execute(query)
@@ -265,13 +265,19 @@ def random_date():
 
 
 def blast_transactions(worker_id, batch_size, target_gb):
+    print(f"Worker {worker_id}: Entering blast_transactions", flush=True)
     conn = get_connection()
     cur = conn.cursor()
 
+    print(f"Worker {worker_id}: Connected to DB", flush=True)
     customer_ids = fetch_ids(cur, "customer", "customer_id")
+    print(f"Worker {worker_id}: fetched customer_ids", flush=True)
     staff_ids = fetch_ids(cur, "staff", "staff_id")
+    print(f"Worker {worker_id}: fetched staff_ids", flush=True)
     inventory_ids = fetch_ids(cur, "inventory", "inventory_id")
+    print(f"Worker {worker_id}: fetched inventory_ids", flush=True)
     rental_ids = fetch_ids(cur, "rental", "rental_id")
+    print(f"Worker {worker_id}: fetched rental_ids", flush=True)
 
     print(
         f"Worker {worker_id}: Started | FK pools -> customers={len(customer_ids)}, inventory={len(inventory_ids)}, rentals={len(rental_ids)}"
