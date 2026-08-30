@@ -16,8 +16,8 @@ while true; do
     --class org.apache.hudi.utilities.streamer.HoodieMultiTableStreamer \
     --packages org.apache.hudi:hudi-spark3.5-bundle_2.12:0.15.0,org.apache.hudi:hudi-utilities-bundle_2.12:0.15.0,org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.261 \
     --master 'local[2]' \
-    --driver-memory 2500m \
-    --executor-memory 2500m \
+    --driver-memory 2g \
+    --executor-memory 2g \
     --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
     --conf spark.sql.hive.convertMetastoreParquet=false \
     --conf spark.hadoop.fs.s3a.access.key="${AWS_ACCESS_KEY_ID}" \
