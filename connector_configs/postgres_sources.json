@@ -13,7 +13,8 @@
     "topic.prefix": "cdc",
 
     "table.include.list": "public.*",
-    "snapshot.mode": "initial",
+    "snapshot.mode": "always",
+    "slot.name": "debezium_slot_v2",
     "publication.autocreate.mode": "all_tables",
     "decimal.handling.mode": "string",
 
