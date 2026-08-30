@@ -17,10 +17,11 @@ DB_USER = os.environ.get("DB_USER", "postgres")
 DB_PASS = os.environ.get("DB_PASS", "postgres")
 TARGET_SIZE_GB = int(os.environ.get("TARGET_SIZE_GB", "100"))
 NUM_WORKERS = int(os.environ.get("NUM_WORKERS", "4"))
-BATCH_SIZE = int(os.environ.get("BATCH_SIZE", "5000"))
+BATCH_SIZE = int(os.environ.get("BATCH_SIZE", "2000"))
 OP_INSERT_PCT = int(os.environ.get("OP_INSERT_PCT", "60"))
 OP_UPDATE_PCT = int(os.environ.get("OP_UPDATE_PCT", "25"))
 OP_DELETE_PCT = int(os.environ.get("OP_DELETE_PCT", "15"))
+SLEEP_BETWEEN_BATCHES = float(os.environ.get("SLEEP_BETWEEN_BATCHES", "0.2"))
 
 
 def get_connection():
@@ -349,6 +350,9 @@ def blast_transactions(worker_id, batch_size, target_gb):
                     "DELETE FROM payment WHERE rental_id = ANY(%s)", (delete_rentals,)
                 )
                 total_inserted += cur.rowcount
+
+            if SLEEP_BETWEEN_BATCHES > 0:
+                time.sleep(SLEEP_BETWEEN_BATCHES)
 
         except Exception as e:
             print(f"Worker {worker_id} Warning: Batch failed (retrying): {e}")
