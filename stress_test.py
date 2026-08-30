@@ -1,3 +1,4 @@
+import sys
 import psycopg2
 import psycopg2.extras
 import time
@@ -381,13 +382,19 @@ if __name__ == "__main__":
     cur = conn.cursor()
     initial_size = get_db_size_gb(cur)
     print(f"Current DB size: {initial_size:.2f} GB")
+
+    cur.execute("SELECT COUNT(*) FROM customer")
+    customer_count = cur.fetchone()[0]
     cur.close()
     conn.close()
 
-    upscale_smallint_columns()
-    seed_dimensions()
-    seed_bridge_tables()
-    seed_inventory()
+    if customer_count < 1000:
+        upscale_smallint_columns()
+        seed_dimensions()
+        seed_bridge_tables()
+        seed_inventory()
+    else:
+        print("Database already seeded. Skipping Phase 1-3 (Seeding) to prevent duplicate errors and speed up restart.")
 
     print("\n" + "=" * 60)
     print(f"PHASE 4: Blasting rental & payment with {NUM_WORKERS} workers")
@@ -403,6 +410,16 @@ if __name__ == "__main__":
 
     for p in processes:
         p.join()
+
+    any_failed = False
+    for p in processes:
+        if p.exitcode != 0:
+            print(f"Worker {p.pid} crashed with exit code {p.exitcode}")
+            any_failed = True
+
+    if any_failed:
+        print("One or more workers crashed (OOM?). Exiting main process with error to trigger bash restart.")
+        sys.exit(1)
 
     conn = get_connection()
     cur = conn.cursor()
