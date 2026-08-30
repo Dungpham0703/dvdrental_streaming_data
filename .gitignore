@@ -3,7 +3,7 @@
 
 .DS_Store
 .vscode/
-src/__pycache__
+*/__pycache__
 
 dbt_packages
 logs
@@ -11,3 +11,11 @@ target/
 .user.yml
 profiles.yml
 package-lock.yml
+
+*/.next
+*/node_modules
+*/ui-ux-pro-max-skill-main
+food_deliveries.py
+*/mviz
+06_ai_agent/
+07_ai_dashboard/

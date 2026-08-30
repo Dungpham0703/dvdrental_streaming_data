@@ -27,8 +27,11 @@ def get_connection():
     return conn
 
 
-def fetch_ids(cur, table, column):
-    cur.execute(f"SELECT {column} FROM {table}")
+def fetch_ids(cur, table, column, limit=100000):
+    query = f"SELECT {column} FROM {table}"
+    if limit:
+        query += f" LIMIT {limit}"
+    cur.execute(query)
     return [row[0] for row in cur.fetchall()]
 
 
@@ -324,7 +327,19 @@ def blast_transactions(worker_id, batch_size, target_gb):
 
         except Exception as e:
             print(f"Worker {worker_id} Warning: Batch failed (retrying): {e}")
-            conn.rollback()
+            try:
+                conn.rollback()
+            except Exception:
+                print(
+                    f"Worker {worker_id} Warning: Rollback failed, connection might be dead. Reconnecting..."
+                )
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+                time.sleep(5)
+                conn = get_connection()
+                cur = conn.cursor()
             time.sleep(1)
 
     cur.close()
