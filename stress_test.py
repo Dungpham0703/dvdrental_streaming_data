@@ -331,18 +331,21 @@ def blast_transactions(worker_id, batch_size, target_gb):
                 total_inserted += batch_size * 2
 
             elif op_roll <= OP_INSERT_PCT + OP_UPDATE_PCT:
-                update_rentals = random.sample(rental_ids, min(batch_size, len(rental_ids)))
+                update_rentals = random.sample(
+                    rental_ids, min(batch_size, len(rental_ids))
+                )
                 cur.execute(
                     "UPDATE payment SET amount = ROUND((RANDOM() * 10)::numeric, 2) WHERE rental_id = ANY(%s)",
-                    (update_rentals,)
+                    (update_rentals,),
                 )
                 total_inserted += cur.rowcount
 
             else:
-                delete_rentals = random.sample(rental_ids, min(batch_size, len(rental_ids)))
+                delete_rentals = random.sample(
+                    rental_ids, min(batch_size, len(rental_ids))
+                )
                 cur.execute(
-                    "DELETE FROM payment WHERE rental_id = ANY(%s)",
-                    (delete_rentals,)
+                    "DELETE FROM payment WHERE rental_id = ANY(%s)", (delete_rentals,)
                 )
                 total_inserted += cur.rowcount
 

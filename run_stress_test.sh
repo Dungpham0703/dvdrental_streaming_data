@@ -13,13 +13,13 @@ echo "========================================================" | tee -a $LOG_FI
 
 while true; do
     echo "[$(date)] Launching stress_test.py..." | tee -a $LOG_FILE
-    
+
     # Run the python script
     python3 stress_test.py
-    
+
     # Capture the exit code of the python script
     EXIT_CODE=$?
-    
+
     if [ $EXIT_CODE -eq 0 ]; then
         echo "[$(date)] Stress test finished normally (Target DB size reached). Exiting runner." | tee -a $LOG_FILE
         break
