@@ -6,7 +6,7 @@ services:
     ports:
       - "8083:8083"
     environment:
-      HEAP_OPTS: "-Xmx2G -Xms1G"
+      HEAP_OPTS: "-Xmx2.5G -Xms1G"
       BOOTSTRAP_SERVERS: ${KAFKA_BROKER_IP}:${KAFKA_PORT}
       GROUP_ID: 1
       CONFIG_STORAGE_TOPIC: my_connect_configs_v13
