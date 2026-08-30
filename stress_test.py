@@ -278,11 +278,13 @@ def blast_transactions(worker_id, batch_size, target_gb):
     )
 
     total_inserted = 0
+    last_logged = 0
     start_time = time.time()
 
     while True:
         try:
-            if total_inserted % (batch_size * 20) == 0 and total_inserted > 0:
+            if total_inserted - last_logged >= (batch_size * 20) and total_inserted > 0:
+                last_logged = total_inserted
                 current_gb = get_db_size_gb(cur)
                 elapsed = time.time() - start_time
                 rate = total_inserted / elapsed if elapsed > 0 else 0
