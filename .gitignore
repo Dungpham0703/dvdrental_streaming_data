@@ -17,8 +17,9 @@ package-lock.yml
 */ui-ux-pro-max-skill-main
 food_deliveries.py
 */mviz
-06_ai_agent/
-07_ai_dashboard/
+06_ai_agent/chroma_db/
+06_ai_agent/rag_context.txt
+06_ai_agent/query_history.txt
 
 05_superset_visual/dashboards_as_code/*
 05_superset_visual/dashboard_export_20260903T151214/*
