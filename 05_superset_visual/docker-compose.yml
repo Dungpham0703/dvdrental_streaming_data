@@ -54,6 +54,7 @@ services:
       AWS_DEFAULT_REGION: "${AWS_REGION}"
     volumes:
       - ./superset_config.py:/app/pythonpath/superset_config.py
+      - ./dashboards_as_code:/app/dashboards_as_code
     depends_on:
       superset-init:
         condition: service_completed_successfully
