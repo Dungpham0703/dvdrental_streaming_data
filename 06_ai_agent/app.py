@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 import sys
 import json
 import asyncio
@@ -9,10 +10,20 @@ if str(CURRENT_DIR) not in sys.path:
     sys.path.insert(0, str(CURRENT_DIR))
 
 from dotenv import load_dotenv
+
+# pyrefly: ignore [missing-import]
 import uvicorn
+
+# pyrefly: ignore [missing-import]
 from fastapi import FastAPI, HTTPException
+
+# pyrefly: ignore [missing-import]
 from fastapi.middleware.cors import CORSMiddleware
+
+# pyrefly: ignore [missing-import]
 from fastapi.responses import StreamingResponse
+
+# pyrefly: ignore [missing-import]
 from pydantic import BaseModel
 
 env_path = CURRENT_DIR / ".env"

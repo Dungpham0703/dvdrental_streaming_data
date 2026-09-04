@@ -2,7 +2,9 @@ version: "3.8"
 services:
   debezium:
     image: quay.io/debezium/connect:2.7
-    restart: always
+    restart: unless-stopped
+    networks:
+      - streaming_network
     ports:
       - "8083:8083"
     environment:
@@ -21,3 +23,8 @@ services:
       KAFKA_SERVER: ${KAFKA_SERVER}
       CONNECT_CONFIG_PROVIDERS: env
       CONNECT_CONFIG_PROVIDERS_ENV_CLASS: org.apache.kafka.common.config.provider.EnvVarConfigProvider
+
+networks:
+  streaming_network:
+    name: streaming_network
+    external: true

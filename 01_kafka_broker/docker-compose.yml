@@ -3,14 +3,18 @@ version: "3.8"
 services:
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
-    restart: always
+    restart: unless-stopped
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+    networks:
+      - streaming_network
 
   kafka:
     image: confluentinc/cp-kafka:7.5.0
-    restart: always
+    restart: unless-stopped
     depends_on:
       - zookeeper
     ports:
@@ -24,3 +28,18 @@ services:
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_LOG_CLEANUP_POLICY: "compact"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - streaming_network
+
+volumes:
+  zookeeper_data:
+    driver: local
+  kafka_data:
+    driver: local
+
+networks:
+  streaming_network:
+    name: streaming_network
+    driver: bridge

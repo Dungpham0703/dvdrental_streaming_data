@@ -10,6 +10,8 @@ services:
       POSTGRES_PASSWORD: superset_password
     volumes:
       - superset_db_data:/var/lib/postgresql/data
+    networks:
+      - streaming_network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U superset"]
       interval: 5s
@@ -34,6 +36,8 @@ services:
       SQLALCHEMY_DATABASE_URI: "${SQLALCHEMY_DATABASE_URI}"
     volumes:
       - ./superset_config.py:/app/pythonpath/superset_config.py
+    networks:
+      - streaming_network
     depends_on:
       superset-db:
         condition: service_healthy
@@ -55,6 +59,8 @@ services:
     volumes:
       - ./superset_config.py:/app/pythonpath/superset_config.py
       - ./dashboards_as_code:/app/dashboards_as_code
+    networks:
+      - streaming_network
     depends_on:
       superset-init:
         condition: service_completed_successfully
@@ -62,3 +68,8 @@ services:
 
 volumes:
   superset_db_data:
+
+networks:
+  streaming_network:
+    name: streaming_network
+    external: true

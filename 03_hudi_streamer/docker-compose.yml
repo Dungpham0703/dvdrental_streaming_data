@@ -4,8 +4,9 @@ services:
   hudi-streamer:
     image: apache/spark:3.5.0
     container_name: hudi-streamer-multi
-    restart: always
-    user: root
+    restart: unless-stopped
+    networks:
+      - streaming_network
     environment:
       - KAFKA_BROKER_IP=${KAFKA_BROKER_IP}
       - KAFKA_PORT=${KAFKA_PORT}
@@ -16,3 +17,8 @@ services:
     volumes:
       - ./:/opt/hudi-configs
     entrypoint: /bin/bash /opt/hudi-configs/run_hudi_streamer.sh
+
+networks:
+  streaming_network:
+    name: streaming_network
+    external: true
