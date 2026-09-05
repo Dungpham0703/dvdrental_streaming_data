@@ -92,6 +92,30 @@ The final Data Marts (Gold layer in Iceberg format) are queried directly from S3
 
 **AI Dashboard & Text-to-SQL Flow:**
 To empower non-technical users, we built an innovative **AI Dashboard** that allows users to "chat with their data" in natural language:
-1. **User Request:** A business user types a question (e.g., *"Show me the top 5 movie categories by revenue this month"*) into the Frontend Web App (`07_ai_dashboard`).
+
+1. **User Request:** A business user types a question (e.g., _"Show me the top 5 movie categories by revenue this month"_) into the Frontend Web App (`07_ai_dashboard`).
 2. **AI Agent (`06_ai_agent`):** A backend Python service utilizing **Google Gemini Pro** processes the prompt. It understands the underlying Iceberg schema and generates an optimized, syntax-correct Athena SQL query.
 3. **Execution & Rendering:** The Agent executes the generated SQL against AWS Athena, retrieves the results, and returns them to the frontend, which dynamically renders a custom chart or data table.
+
+## 8. Business Intelligence Dashboards (Metabase)
+
+A fully automated Metabase setup is provided via Python script (`05_metabase_visual/setup_metabase.py`), which instantly provisions the following 4 interactive dashboards directly on top of the Iceberg Data Marts via AWS Athena.
+
+### 1. Revenue & Payment Analytics
+
+![Revenue Analytics 1](<05_metabase_visual/dashboards/Metabase -  1. Revenue & Payment Analytics-images-0.jpg>)
+![Revenue Analytics 2](<05_metabase_visual/dashboards/Metabase -  1. Revenue & Payment Analytics-images-1.jpg>)
+
+### 2. Rental Operations
+
+![Rental Operations 1](<05_metabase_visual/dashboards/Metabase -  2. Rental Operations_page-0001.jpg>)
+![Rental Operations 2](<05_metabase_visual/dashboards/Metabase -  2. Rental Operations_page-0002.jpg>)
+
+### 3. Customer Intelligence
+
+![Customer Intelligence](<05_metabase_visual/dashboards/Metabase -  3. Customer Intelligence_page-0001.jpg>)
+
+### 4. Film Catalog & Inventory
+
+![Film Catalog 1](<05_metabase_visual/dashboards/Metabase - 4. Film Catalog & Inventory_page-0001.jpg>)
+![Film Catalog 2](<05_metabase_visual/dashboards/Metabase - 4. Film Catalog & Inventory_page-0002.jpg>)
