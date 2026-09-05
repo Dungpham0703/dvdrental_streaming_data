@@ -25,3 +25,5 @@ food_deliveries.py
 05_superset_visual/dashboard_export_20260903T151214/*
 
 05_superset_visual/dashboard_export_20260903T151615/*
+*/aws/
+*/.venv/

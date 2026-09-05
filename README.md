@@ -62,7 +62,7 @@ To solve the analytical bottlenecks, the data was remodeled into a **Star Schema
 2. **Raw/Bronze Layer:** Hudi Streamer consumes the Kafka topics and writes raw CDC events as Hudi MOR tables to AWS S3.
 3. **Staging/Silver Layer:** dbt reads the Hudi tables, deduplicates records, handles tombstone deletes, and writes cleansed data into Iceberg tables.
 4. **Data Mart/Gold Layer:** dbt transforms the Staging data into the final Star Schema (Facts and SCD Type 2 Dimensions) using Iceberg format, optimized for BI consumption.
-5. **Analytics & BI:** AWS Athena queries the Iceberg Data Marts to power real-time dashboards in BI tools like Apache Superset or QuickSight.
+5. **Analytics & BI:** AWS Athena queries the Iceberg Data Marts to power real-time dashboards in BI tools like Metabase or QuickSight.
 
 ## 5. Performance Review
 
@@ -79,7 +79,7 @@ dvdrental_streaming_data/
 ├── 02_debezium_connector/    # CDC config (Postgres -> Kafka)
 ├── 03_hudi_streamer/         # Ingestion scripts (Kafka -> Hudi on S3)
 ├── 04_dbt_transform/         # dbt models (Silver & Gold Layers)
-├── 05_superset_visual/       # BI Dashboards as code (Apache Superset)
+├── 05_metabase_visual/       # BI Dashboards as code (Metabase)
 ├── 06_ai_agent/              # GenAI Python agent for Text-to-SQL logic
 ├── 07_ai_dashboard/          # Frontend Web App (React/Vite/Next.js) for AI Dashboard
 └── src/images/               # Architecture diagrams and assets
@@ -88,7 +88,7 @@ dvdrental_streaming_data/
 ## 7. Data Serving & AI Dashboard
 
 **Data Serving Architecture:**
-The final Data Marts (Gold layer in Iceberg format) are queried directly from S3 via **AWS Athena** - a serverless interactive query engine. BI tools like Apache Superset (`05_superset_visual`) connect to Athena to render pre-defined analytics dashboards.
+The final Data Marts (Gold layer in Iceberg format) are queried directly from S3 via **AWS Athena** - a serverless interactive query engine. BI tools like Metabase (`05_metabase_visual`) connect to Athena to render pre-defined analytics dashboards.
 
 **AI Dashboard & Text-to-SQL Flow:**
 To empower non-technical users, we built an innovative **AI Dashboard** that allows users to "chat with their data" in natural language:
