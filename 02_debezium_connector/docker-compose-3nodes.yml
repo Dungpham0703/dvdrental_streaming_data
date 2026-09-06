@@ -1,0 +1,29 @@
+version: "3.8"
+services:
+  debezium:
+    image: quay.io/debezium/connect:2.7
+    restart: unless-stopped
+    networks:
+      - streaming_network
+    ports:
+      - "8083:8083"
+    environment:
+      BOOTSTRAP_SERVERS: kafka-1:29092,kafka-2:29092,kafka-3:29092
+      GROUP_ID: 1
+      CONFIG_STORAGE_TOPIC: my_connect_configs_v14
+      OFFSET_STORAGE_TOPIC: my_connect_offsets_v14
+      STATUS_STORAGE_TOPIC: my_connect_statuses_v14
+      CONFIG_STORAGE_REPLICATION_FACTOR: 3
+      OFFSET_STORAGE_REPLICATION_FACTOR: 3
+      STATUS_STORAGE_REPLICATION_FACTOR: 3
+      DB_HOST: ${DB_HOST}
+      DB_USER: ${DB_USER}
+      DB_PASS: ${DB_PASS}
+      DB_NAME: ${DB_NAME}
+      CONNECT_CONFIG_PROVIDERS: env
+      CONNECT_CONFIG_PROVIDERS_ENV_CLASS: org.apache.kafka.common.config.provider.EnvVarConfigProvider
+
+networks:
+  streaming_network:
+    name: streaming_network
+    external: true
