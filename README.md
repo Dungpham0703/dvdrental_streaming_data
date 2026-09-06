@@ -52,7 +52,9 @@ To solve the analytical bottlenecks, the data was remodeled into a **Star Schema
 - **Apache Iceberg (Staging/Mart Layers):** Chosen for Silver (Staging) and Gold (Mart) layers. Iceberg excels at large-scale OLAP analytical queries, schema evolution, and time-travel querying. It integrates seamlessly with dbt and AWS Athena for high-performance reading.
   ![Staging Data with Iceberg Format](src/images/staging_data_with_iceberg_format.png)
   ![Mart Data with Iceberg Format](src/images/mart_data_with_iceberg_format.png)
-- **dbt (Data Build Tool):** Manages the transformation logic (SQL) from Raw to Staging to Mart. It handles the complex SCD Type 2 logic and automated data quality testing.
+- **dbt (Data Build Tool):** Manages the transformation logic (SQL) from Raw to Staging to Mart. It handles complex SCD Type 2 logic, incremental CDC processing, and automated data quality testing.
+  ![dbt Lineage Graph](src/images/dbt_linage_graph_model.png)
+- **Apache Airflow (Orchestration):** Orchestrates and automates the dbt transformation workflow end-to-end. Runs on a 15-minute cron schedule (`*/15 * * * *`), automatically executing `dbt deps` -> `dbt run` -> `dbt test` to ensure fresh, validated data in the Gold layer.
 - **AWS Athena & Glue:** Provides serverless data cataloging and querying. Glue organizes the tables, making the S3 data instantly queryable via standard SQL in Athena.
   ![Databases on AWS Glue](src/images/databases_on_aws_glue.png)
 
@@ -62,7 +64,8 @@ To solve the analytical bottlenecks, the data was remodeled into a **Star Schema
 2. **Raw/Bronze Layer:** Hudi Streamer consumes the Kafka topics and writes raw CDC events as Hudi MOR tables to AWS S3.
 3. **Staging/Silver Layer:** dbt reads the Hudi tables, deduplicates records, handles tombstone deletes, and writes cleansed data into Iceberg tables.
 4. **Data Mart/Gold Layer:** dbt transforms the Staging data into the final Star Schema (Facts and SCD Type 2 Dimensions) using Iceberg format, optimized for BI consumption.
-5. **Analytics & BI:** AWS Athena queries the Iceberg Data Marts to power real-time dashboards in BI tools like Metabase or QuickSight.
+5. **Orchestration with Airflow:** Apache Airflow triggers the dbt pipeline every 15 minutes (`dbt deps` -> `dbt run` -> `dbt test`) to maintain near real-time data freshness with automatic data quality verification.
+6. **Analytics & BI:** AWS Athena queries the Iceberg Data Marts to power real-time dashboards in BI tools like Metabase or QuickSight.
 
 ## 5. Performance Review
 
@@ -82,6 +85,7 @@ dvdrental_streaming_data/
 ├── 05_metabase_visual/       # BI Dashboards as code (Metabase)
 ├── 06_ai_agent/              # GenAI Python agent for Text-to-SQL logic
 ├── 07_ai_dashboard/          # Frontend Web App (React/Vite/Next.js) for AI Dashboard
+├── 08_airflow/               # Apache Airflow orchestration (dbt DAG schedule)
 └── src/images/               # Architecture diagrams and assets
 ```
 
