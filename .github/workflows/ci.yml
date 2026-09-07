@@ -70,7 +70,7 @@ jobs:
                 s3_staging_dir: s3://${{ secrets.AWS_S3_BUCKET_NAME }}/staging/dbt-staging/
                 s3_data_dir: s3://${{ secrets.AWS_S3_BUCKET_NAME }}/staging/hudi-warehouse/
                 s3_data_naming: schema_table
-                region_name: ${{ secrets.AWS_REGION || 'us-east-1' }}
+                region_name: ${{ secrets.AWS_REGION }}
                 database: awsdatacatalog
                 schema: dvdrental_mart_staging
                 threads: 4
@@ -81,7 +81,7 @@ jobs:
                 s3_staging_dir: s3://${{ secrets.AWS_S3_BUCKET_NAME }}/prod/dbt-staging/
                 s3_data_dir: s3://${{ secrets.AWS_S3_BUCKET_NAME }}/prod/hudi-warehouse/
                 s3_data_naming: schema_table
-                region_name: ${{ secrets.AWS_REGION || 'us-east-1' }}
+                region_name: ${{ secrets.AWS_REGION }}
                 database: awsdatacatalog
                 schema: dvdrental_mart_prod
                 threads: 4
