@@ -3,7 +3,8 @@
         materialized='incremental',
         incremental_strategy='merge',
         unique_key='rental_id',
-        on_schema_change='sync_all_columns'
+        on_schema_change='sync_all_columns',
+        partitioned_by=['truncate(10, rental_date)']
     )
 }}
 
