@@ -1,12 +1,13 @@
+import multiprocessing
+import os
+import random
 import sys
+import time
+
 import psycopg2
 import psycopg2.extras
-import time
-import random
-import os
-import multiprocessing
-from faker import Faker
 from dotenv import load_dotenv
+from faker import Faker
 
 load_dotenv()
 
@@ -362,17 +363,17 @@ def blast_transactions(worker_id, batch_size, target_gb):
             if SLEEP_BETWEEN_BATCHES > 0:
                 time.sleep(SLEEP_BETWEEN_BATCHES)
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             print(f"Worker {worker_id} Warning: Batch failed (retrying): {e}")
             try:
                 conn.rollback()
-            except Exception:
+            except Exception:  # noqa: BLE001
                 print(
                     f"Worker {worker_id} Warning: Rollback failed, connection might be dead. Reconnecting..."
                 )
                 try:
                     conn.close()
-                except Exception:
+                except Exception:  # noqa: BLE001, S110
                     pass
                 time.sleep(5)
                 conn = get_connection()

@@ -1,8 +1,10 @@
 # pyrefly: ignore [missing-import]
+from datetime import datetime, timedelta
+
 from airflow import DAG
+
 # pyrefly: ignore [missing-import]
 from airflow.operators.bash import BashOperator
-from datetime import datetime, timedelta
 
 default_args = {
     'owner': 'tino_dataviet',

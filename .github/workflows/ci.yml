@@ -96,7 +96,7 @@ jobs:
         run: dbt parse
 
       - name: Verify dbt Models Compilation
-        run: dbt compile --target dev
+        run: dbt compile --target staging
 
   airflow-ci:
     name: Airflow DAGs & Docker Syntax Check

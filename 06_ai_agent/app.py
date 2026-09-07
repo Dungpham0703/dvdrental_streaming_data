@@ -1,18 +1,16 @@
-# ruff: noqa: E402
-import sys
-import json
 import asyncio
+import json
+import sys
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Any
 
 CURRENT_DIR = Path(__file__).resolve().parent
 if str(CURRENT_DIR) not in sys.path:
     sys.path.insert(0, str(CURRENT_DIR))
 
-from dotenv import load_dotenv
-
 # pyrefly: ignore [missing-import]
 import uvicorn
+from dotenv import load_dotenv
 
 # pyrefly: ignore [missing-import]
 from fastapi import FastAPI, HTTPException
@@ -30,8 +28,8 @@ env_path = CURRENT_DIR / ".env"
 load_dotenv(dotenv_path=env_path)
 load_dotenv()
 
-from sql_generator import TextToSQLGenerator
 from athena_executor import AthenaQueryExecutor
+from sql_generator import TextToSQLGenerator
 
 app = FastAPI(
     title="Tino Data — AI Text-to-SQL Analytics Agent",
@@ -53,15 +51,15 @@ executor = AthenaQueryExecutor()
 
 class QueryRequest(BaseModel):
     prompt: str
-    custom_sql: Optional[str] = None
+    custom_sql: str | None = None
 
 
 class WidgetResponse(BaseModel):
     title: str
     sql: str
     chartType: str
-    columns: List[str]
-    data: List[Dict[str, Any]]
+    columns: list[str]
+    data: list[dict[str, Any]]
     execution_time_ms: int
     mode: str
 
@@ -70,10 +68,10 @@ class QueryResponse(BaseModel):
     success: bool
     prompt: str
     summary: str
-    thought_process: Optional[List[str]] = None
+    thought_process: list[str] | None = None
     is_dashboard: bool
-    dashboard_title: Optional[str] = "Tino Data Analytics Dashboard"
-    widgets: List[WidgetResponse]
+    dashboard_title: str | None = "Tino Data Analytics Dashboard"
+    widgets: list[WidgetResponse]
 
 
 def sse_event(data: dict) -> str:
@@ -195,13 +193,13 @@ async def handle_query_stream(request: QueryRequest):
                         "step": "generate_sql",
                         "status": "error",
                         "message": "Sinh SQL via Gemini AI",
-                        "detail": f"Lỗi: {str(e)}",
+                        "detail": f"Lỗi: {e!s}",
                     }
                 )
                 yield sse_event(
                     {
                         "type": "error",
-                        "message": f"Không thể sinh SQL: {str(e)}",
+                        "message": f"Không thể sinh SQL: {e!s}",
                         "detail": str(e),
                     }
                 )
@@ -267,7 +265,7 @@ async def handle_query_stream(request: QueryRequest):
                             "step": step_id,
                             "status": "error",
                             "message": f"Lỗi thực thi: {widget_title}",
-                            "detail": f"SQL: {widget_sql[:100]}... | Error: {str(e)}",
+                            "detail": f"SQL: {widget_sql[:100]}... | Error: {e!s}",
                         }
                     )
 
@@ -289,7 +287,7 @@ async def handle_query_stream(request: QueryRequest):
             yield sse_event(
                 {
                     "type": "error",
-                    "message": f"Lỗi hệ thống: {str(e)}",
+                    "message": f"Lỗi hệ thống: {e!s}",
                     "detail": str(e),
                 }
             )

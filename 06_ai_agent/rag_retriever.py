@@ -1,8 +1,7 @@
-# ruff: noqa: E402
-import sys
 import json
+import sys
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any
 
 CURRENT_DIR = Path(__file__).resolve().parent
 if str(CURRENT_DIR) not in sys.path:
@@ -24,7 +23,7 @@ class RAGRetriever:
         self.semantic_dict = self._load_semantic_dictionary()
         self.collection = self._get_or_create_collection()
 
-    def _load_semantic_dictionary(self) -> Dict[str, Any]:
+    def _load_semantic_dictionary(self) -> dict[str, Any]:
         if SEMANTIC_FILE.exists():
             with open(SEMANTIC_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)

@@ -1,10 +1,10 @@
-# ruff: noqa: E402
-import os
-import sys
 import json
+import os
 import re
+import sys
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any
+
 from dotenv import load_dotenv
 
 CURRENT_DIR = Path(__file__).resolve().parent
@@ -107,7 +107,7 @@ Ví dụ minh họa cấu trúc JSON trả về:
 """
         return prompt
 
-    def generate_sql_spec(self, user_question: str) -> Dict[str, Any]:
+    def generate_sql_spec(self, user_question: str) -> dict[str, Any]:
         context = self.rag.retrieve_context(user_question)
         system_instruction = self.build_system_prompt(context)
 
@@ -193,7 +193,7 @@ Ví dụ minh họa cấu trúc JSON trả về:
 
         return self._generate_fallback_spec(user_question)
 
-    def _generate_fallback_spec(self, question: str) -> Dict[str, Any]:
+    def _generate_fallback_spec(self, question: str) -> dict[str, Any]:
         q = question.lower()
 
         if any(

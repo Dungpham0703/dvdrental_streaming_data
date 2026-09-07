@@ -1,7 +1,8 @@
 import os
 import time
+from typing import Any
+
 import boto3
-from typing import Dict, Any, List, Tuple
 
 
 class AthenaQueryExecutor:
@@ -23,7 +24,7 @@ class AthenaQueryExecutor:
         except Exception as e:
             print(f"[WARN] Boto3 Athena client init note: {e}")
 
-    def execute_query(self, sql_query: str) -> Dict[str, Any]:
+    def execute_query(self, sql_query: str) -> dict[str, Any]:
         start_time = time.time()
 
         if self.client and os.getenv("AWS_ACCESS_KEY_ID"):
@@ -56,8 +57,8 @@ class AthenaQueryExecutor:
         }
 
     def execute_widgets(
-        self, widgets_spec: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+        self, widgets_spec: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         results = []
         for w in widgets_spec:
             chart_type = w.get("chartType", "").lower()
@@ -89,7 +90,7 @@ class AthenaQueryExecutor:
             )
         return results
 
-    def _run_live_athena_query(self, sql_query: str) -> Tuple[List[Dict], List[str]]:
+    def _run_live_athena_query(self, sql_query: str) -> tuple[list[dict], list[str]]:
         response = self.client.start_query_execution(
             QueryString=sql_query,
             QueryExecutionContext={"Database": self.database},
@@ -137,7 +138,7 @@ class AthenaQueryExecutor:
 
         return data, columns
 
-    def _simulate_query_execution(self, sql_query: str) -> Tuple[List[Dict], List[str]]:
+    def _simulate_query_execution(self, sql_query: str) -> tuple[list[dict], list[str]]:
         sql_lower = sql_query.lower()
 
         if "information_schema" in sql_lower or "table_name" in sql_lower:
@@ -250,7 +251,7 @@ class AthenaQueryExecutor:
         return data, ["customer_id", "email", "total_spent", "rentals"]
 
     @staticmethod
-    def detect_chart_type(data: List[Dict[str, Any]], columns: List[str]) -> str:
+    def detect_chart_type(data: list[dict[str, Any]], columns: list[str]) -> str:
         if not data or not columns:
             return "table"
 
