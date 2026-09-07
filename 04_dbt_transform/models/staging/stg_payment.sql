@@ -3,8 +3,7 @@
         materialized='incremental',
         incremental_strategy='merge',
         unique_key='payment_id',
-        on_schema_change='sync_all_columns',
-        partitioned_by=['truncate(10, payment_date)']
+        on_schema_change='sync_all_columns'
     )
 }}
 

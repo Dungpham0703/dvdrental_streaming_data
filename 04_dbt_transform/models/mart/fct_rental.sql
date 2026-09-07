@@ -4,7 +4,7 @@
         incremental_strategy='merge',
         unique_key='rental_id',
         on_schema_change='sync_all_columns',
-        partitioned_by=['truncate(10, rental_date)']
+        partitioned_by=['rental_date_day']
     )
 }}
 
@@ -23,6 +23,7 @@ final as (
     select
         r.rental_id,
         r.rental_date,
+        cast(substr(r.rental_date, 1, 10) as date) as rental_date_day,
         r.return_date,
         r.customer_id,
         i.film_id,

@@ -4,7 +4,7 @@
         incremental_strategy='merge',
         unique_key='payment_id',
         on_schema_change='sync_all_columns',
-        partitioned_by=['truncate(10, payment_date)']
+        partitioned_by=['payment_date_day']
     )
 }}
 
@@ -33,6 +33,7 @@ final as (
         i.store_id,
         p.amount,
         p.payment_date,
+        cast(substr(p.payment_date, 1, 10) as date) as payment_date_day,
         p.cdc_capture_at
     from payments p
     left join rentals r
