@@ -1,0 +1,119 @@
+name: Data Lakehouse Pipeline CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  code-quality:
+    name: Code Quality & Linting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Linting Tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff pre-commit
+
+      - name: Run Ruff Linter Check
+        run: ruff check .
+
+      - name: Run Ruff Formatter Check
+        run: ruff format --check .
+
+      - name: Run ShellCheck on Shell Scripts
+        run: |
+          sudo apt-get update && sudo apt-get install -y shellcheck
+          shellcheck run_stress_test.sh
+
+  dbt-ci:
+    name: dbt Models & Syntax Validation
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: 04_dbt_transform
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dbt & Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install dbt-core dbt-athena-community
+
+      - name: Configure dbt Profile for Staging & Prod
+        run: |
+          mkdir -p ~/.dbt
+          cat << 'EOF' > ~/.dbt/profiles.yml
+          dvdrental_athena_dzung:
+            target: staging
+            outputs:
+              staging:
+                type: athena
+                s3_staging_dir: s3://${{ secrets.AWS_S3_BUCKET_NAME }}/staging/dbt-staging/
+                s3_data_dir: s3://${{ secrets.AWS_S3_BUCKET_NAME }}/staging/hudi-warehouse/
+                s3_data_naming: schema_table
+                region_name: ${{ secrets.AWS_REGION || 'us-east-1' }}
+                database: awsdatacatalog
+                schema: dvdrental_mart_staging
+                threads: 4
+                aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+              prod:
+                type: athena
+                s3_staging_dir: s3://${{ secrets.AWS_S3_BUCKET_NAME }}/prod/dbt-staging/
+                s3_data_dir: s3://${{ secrets.AWS_S3_BUCKET_NAME }}/prod/hudi-warehouse/
+                s3_data_naming: schema_table
+                region_name: ${{ secrets.AWS_REGION || 'us-east-1' }}
+                database: awsdatacatalog
+                schema: dvdrental_mart_prod
+                threads: 4
+                aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          EOF
+
+      - name: Install dbt Packages
+        run: dbt deps
+
+      - name: Parse & Validate dbt Lineage Graph
+        run: dbt parse
+
+      - name: Verify dbt Models Compilation
+        run: dbt compile --target dev
+
+  airflow-ci:
+    name: Airflow DAGs & Docker Syntax Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate Airflow DAG Syntax
+        run: |
+          python -m py_compile 08_airflow/dags/dbt_transform.py
+
+      - name: Validate Airflow Docker Compose Configuration
+        run: |
+          docker compose -f 08_airflow/docker-compose.yml config --quiet

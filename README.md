@@ -123,3 +123,17 @@ A fully automated Metabase setup is provided via Python script (`05_metabase_vis
 
 ![Film Catalog 1](<05_metabase_visual/dashboards/Metabase - 4. Film Catalog & Inventory_page-0001.jpg>)
 ![Film Catalog 2](<05_metabase_visual/dashboards/Metabase - 4. Film Catalog & Inventory_page-0002.jpg>)
+
+## 9. CI/CD Pipeline Automation (GitHub Actions)
+
+The repository uses **GitHub Actions** for automated testing, dbt validation, and container build deployment:
+
+- **Continuous Integration (`.github/workflows/ci.yml`)**:
+  - **Code Quality**: Runs `ruff` Python linting/formatting checks, `pre-commit` hooks, and `shellcheck` for shell scripts.
+  - **dbt Transformation CI**: Runs `dbt deps`, `dbt parse`, and `dbt compile` against mock profile configs to guarantee all SQL models, macros, and schema YAMLs compile without syntax errors.
+  - **Airflow Pipeline CI**: Validates Python DAG compilation (`08_airflow/dags/dbt_transform.py`) and Docker Compose configuration.
+
+- **Continuous Deployment (`.github/workflows/cd.yml`)**:
+  - **Airflow Container Build**: Builds and pushes production Docker images for Airflow (`08_airflow`) to **GitHub Container Registry (GHCR)** on pushes to `main`/`master` or version tags (`v*`).
+  - **DAG Artifact Packaging**: Bundles Airflow DAGs into release artifacts for automated deployment to production orchestration environments.
+
