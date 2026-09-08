@@ -109,3 +109,17 @@ models:
           - dbt_utils.expression_is_true:
               expression: ">= 0"
 
+  - name: dim_customer_360
+    description: "Customer 360 Dimension table combining SCD2 current address info with aggregated rental metrics and customer tier classification"
+    columns:
+      - name: customer_key
+        description: "Surrogate key from SCD2 snapshot"
+        tests: [unique, not_null]
+      - name: customer_id
+        description: "Natural customer ID"
+        tests: [not_null]
+      - name: customer_tier
+        description: "Customer tier (VIP, Gold, Silver, Bronze, Non-paying)"
+        tests: [not_null]
+
+

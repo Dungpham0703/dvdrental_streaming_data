@@ -14,3 +14,11 @@ models:
       - name: film_id
         description: "Primary key — from stg_film"
         tests: [unique, not_null]
+
+  - name: int_customer_rental_summary
+    description: "Aggregated customer rental behavior metrics (first/last dates, total rentals, total spend)"
+    columns:
+      - name: customer_id
+        description: "Primary key — FK to stg_customer"
+        tests: [unique, not_null]
+
