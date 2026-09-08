@@ -82,3 +82,30 @@ models:
           - not_null
           - dbt_utils.expression_is_true:
               expression: "> 0"
+
+  - name: dim_date
+    description: "Generated Date Dimension table providing rich calendar context (year, quarter, month, day of week, is_weekend)"
+    columns:
+      - name: date_key
+        description: "Integer date key (YYYYMMDD)"
+        tests: [unique, not_null]
+      - name: date_day
+        description: "Date value"
+        tests: [unique, not_null]
+
+  - name: fct_daily_revenue
+    description: "Daily aggregated revenue summary per store"
+    columns:
+      - name: revenue_key
+        description: "Surrogate primary key (YYYYMMDD_store_id)"
+        tests: [unique, not_null]
+      - name: payment_date_day
+        tests: [not_null]
+      - name: store_id
+        tests: [not_null]
+      - name: total_revenue
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+
