@@ -28,3 +28,5 @@ food_deliveries.py
 */aws/
 */.venv/
 */setup_metabase.py
+gen_faker.py
+patch_food_deliveries.py

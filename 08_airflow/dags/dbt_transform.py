@@ -6,7 +6,7 @@ from airflow import DAG
 from airflow.operators.bash import BashOperator
 
 default_args = {
-    'owner': 'tino_dataviet',
+    'owner': 'tino_data',
     'depends_on_past': False,
     'email_on_failure': False,
     'email_on_retry': False,
