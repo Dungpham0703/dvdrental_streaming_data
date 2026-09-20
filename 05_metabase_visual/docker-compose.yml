@@ -7,6 +7,7 @@ services:
       POSTGRES_USER: metabase
       POSTGRES_PASSWORD: metabase_password
     volumes:
+      - ~/.aws:/home/metabase/.aws:ro
       - metabase_db_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U metabase"]
@@ -27,8 +28,6 @@ services:
       MB_DB_USER: metabase
       MB_DB_PASS: metabase_password
       MB_DB_HOST: metabase-db
-      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
-      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
       AWS_REGION: "${AWS_REGION}"
     depends_on:
       metabase-db:
@@ -36,4 +35,5 @@ services:
     restart: unless-stopped
 
 volumes:
+      - ~/.aws:/home/metabase/.aws:ro
   metabase_db_data:

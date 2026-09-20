@@ -6,7 +6,6 @@ echo 'Initializing Apache Hudi MultiTableStreamer for all tables (3 Nodes Cluste
 find /opt/hudi-configs -type f \( -name "*.properties" -o -name "*.avsc" \) -exec sed -i 's/\r$//' {} +
 
 cp /opt/hudi-configs/common.properties /tmp/common.properties
-# Sửa chỗ này: Thay vì lấy từ env, ta trỏ thẳng vào cụm 3 nodes
 echo "bootstrap.servers=kafka-1:29092,kafka-2:29092,kafka-3:29092" >> /tmp/common.properties
 
 mkdir -p /opt/spark/work-dir/src/test/resources/streamer-config/
