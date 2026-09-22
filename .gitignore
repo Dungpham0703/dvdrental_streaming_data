@@ -41,8 +41,6 @@ terraform/terraform.tfstate.backup
 terraform/terraform.tfvars
 terraform/*.tfplan
 
-pyspark_duckdb/
-
 test_venv/
 
 setup/
