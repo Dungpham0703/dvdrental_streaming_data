@@ -1,0 +1,13 @@
+{
+  "type": "record",
+  "name": "category",
+  "namespace": "public",
+  "fields": [
+    {"name": "category_id",  "type": "int"},
+    {"name": "name",         "type": ["null", "string"], "default": null},
+    {"name": "last_update",  "type": ["null", "string"], "default": null},
+    {"name": "__ts_ms",      "type": ["null", "long"],   "default": null},
+    {"name": "__op",         "type": ["null", "string"],  "default": null},
+    {"name": "__deleted",    "type": ["null", "string"],  "default": null}
+  ]
+}

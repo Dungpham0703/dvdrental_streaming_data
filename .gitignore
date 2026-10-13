@@ -44,3 +44,22 @@ terraform/*.tfplan
 test_venv/
 
 setup/
+
+pyspark_duckdb/*
+
+xyz/*
+
+pumping_scripts/*
+
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+crash.log
+crash.*.log
+*.tfvars
+*.tfvars.json
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json

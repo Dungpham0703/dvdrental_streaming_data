@@ -1,3 +1,6 @@
+import string
+from pyspark.sql import Column
+from pyspark.sql.functions import when
 from pandas.core.window import Window
 from math import trunc
 import pyspark.sql.functions as F
@@ -231,25 +234,136 @@ if __name__ == "__main__":
     Key Syntax: F.lag(), F.lead(), F.datediff()
     """
 
-    windown_spec = Window.partitionBy("customer_id").orderBy(F.col("rental_date").asc())
+    """ 
+        windown_spec = Window.partitionBy("customer_id").orderBy(F.col("rental_date").asc())
 
-    df_lastest_rental_per_customer = df_rental.groupBy("customer_id").agg(
-        F.max(F.col("rental_date")).alias("previous_rental_date")
-    )
+        df_lastest_rental_per_customer = df_rental.groupBy("customer_id").agg(
+            F.max(F.col("rental_date")).alias("previous_rental_date")
+        )
 
-    df_lastest_rental = df_rental.withColumn("previous_rental_date", F.lag("rental_date", 1).over(windown_spec).cast("date")).withColumn("rental_date_cast", F.col("rental_date").cast("date"))
+        df_lastest_rental = df_rental.withColumn("previous_rental_date", F.lag("rental_date", 1).over(windown_spec).cast("date")).withColumn("rental_date_cast", F.col("rental_date").cast("date"))
+        
+
+        df_gaps = df_lastest_rental.withColumn("gaps", F.date_diff(F.col("rental_date_cast"), F.col("previous_rental_date")))
+
+        df_gaps.show()
+
+        df_highlight = df_gaps.withColumn("at_risk_churn", F.when(F.col("gaps") > 30, True).otherwise(False))
+
+        df_final = df_highlight.filter(F.col("at_risk_churn") == True)
+
+        df_final.show()
+
+    """
+
+    """
+    - From fct_payment: Create a pivot table showing:
+    Rows = customer_id
+    Columns = month (Jan, Feb, Mar...)
+    Values = total spending per month
     
+    - Then unpivot it back to long format using stack()
 
-    df_gaps = df_lastest_rental.withColumn("gaps", F.date_diff(F.col("rental_date_cast"), F.col("previous_rental_date")))
+    """
+    """ 
+        df_temp = df_payment.withColumn("payment_month", F.date_format(F.col("payment_date"), "yyyy-MM"))
 
-    df_gaps.show()
+        df_pivot = df_temp.groupBy("customer_id").pivot("payment_month").agg(
+            F.sum(F.coalesce(F.col("amount"), F.lit(0)))
+        )
 
-    df_highlight = df_gaps.withColumn("at_risk_churn", F.when(F.col("gaps") > 30, True).otherwise(False))
+        df_pivot.show() 
+    """ 
 
-    df_final = df_highlight.filter(F.col("at_risk_churn") == True)
-
-    df_final.show()
+    """
+    Replicate the dim_customer_360 logic:
+    - Get current customers (is_current = true) from dim_customer
+    - Join with fct_rental to calculate: total_rentals, first_rental_date, last_rental_date
+    - Join with fct_payment to calculate: total_spent, avg_payment
+    - Create customer_tier using F.when():
+    - total_spent >= 150 → "VIP"
+    - total_spent >= 100 → "Gold"  
+    - total_spent >= 50  → "Silver"
+    - total_spent > 0    → "Bronze"
+    - else               → "Non-paying"
+    """ 
     
+"""     df_customer_filter = df_customer.filter(F.col("is_current") == "True")
+
+    df_customer_360 = df_customer_filter.join(df_rental, on=["customer_id"], how="left") \
+                                    .join(df_payment, on=["customer_id"], how="left") \
+                                    .groupBy("customer_id").agg(
+                                        F.count(F.col("*")).alias("total_rental"),
+                                        F.min(F.col("rental_date")).alias("first_rental_date"),
+                                        F.max(F.col("rental_date")).alias("last_rental_date"),
+                                        F.sum(F.coalesce(F.col("amount"), F.lit(0))).alias("total_spend"),
+                                        F.avg(F.coalesce(F.col("amount"), F.lit(0))).alias("average_spend")
+                                    ) \
+                                    .withColumn("customer_tier", 
+                                        F.when(F.col("total_spend") > 300, "VIP")
+                                            .when(F.col("total_spend") > 200, "Gold")
+                                            .when(F.col("total_spend") > 100, "Silver")
+                                            .when(F.col("total_spend") > 50, "Bronze")
+                                            .otherwise("Non-paying")
+                                    )
+
+
+
+    df_customer_360.show(50)
+
+ """
+"""
+    Write a function that takes a DataFrame and runs these checks:
+    - assert_not_null(df, "payment_id") → count nulls, raise error if > 0
+    - assert_unique(df, "payment_id")   → count duplicates, raise error if > 0
+    - assert_positive(df, "amount")     → count rows where amount <= 0
+    - Print a summary report of all checks (passed/failed)
+"""
+
+def assert_not_null(df: DataFrame, col_name: str):
+    total_nulls = df.filter(F.col(col_name).isNull()).count()
+    if total_nulls > 0:
+        raise ValueError(f"FAILED: assert_not_null on '{col_name}' ({total_nulls} nulls found)")
+    return f"PASSED: assert_not_null on '{col_name}'"
+
+def assert_unique(df: DataFrame, col_name: str):
+    total_count = df.count()
+    unique_count = df.select(col_name).distinct().count()
+    duplicates = total_count - unique_count
+    if duplicates > 0:
+        raise ValueError(f"FAILED: assert_unique on '{col_name}' ({duplicates} duplicates found)")
+    return f"PASSED: assert_unique on '{col_name}'"
+
+def assert_positive(df: DataFrame, col_name: str):
+    non_positive_count = df.filter(F.col(col_name) <= 0).count()
+    if non_positive_count > 0:
+        raise ValueError(f"FAILED: assert_positive on '{col_name}' ({non_positive_count} rows <= 0)")
+    return f"PASSED: assert_positive on '{col_name}'"
+
+def run_data_quality_checks(df: DataFrame):
+    print("\n--- Data Quality Summary Report ---")
+    results = []
+    
+    try:
+        results.append(assert_not_null(df, "payment_id"))
+    except ValueError as e:
+        results.append(str(e))
+        
+    try:
+        results.append(assert_unique(df, "payment_id"))
+    except ValueError as e:
+        results.append(str(e))
+        
+    try:
+        results.append(assert_positive(df, "amount"))
+    except ValueError as e:
+        results.append(str(e))
+        
+    for res in results:
+        print(res)
+    print("-----------------------------------")
+
+run_data_quality_checks(df_payment)
 
 
 
