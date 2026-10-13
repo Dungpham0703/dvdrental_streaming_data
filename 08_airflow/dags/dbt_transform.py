@@ -28,7 +28,7 @@ with DAG(
 
     dbt_project_dir = '/opt/airflow/dbt_transform'
     dbt_profiles_dir = '/opt/airflow/dbt_transform'
-    common_flags = f'--project-dir {dbt_project_dir} --profiles-dir {dbt_profiles_dir}'
+    common_flags = f'--project-dir {dbt_project_dir} --profiles-dir {dbt_profiles_dir} --target-path /tmp/dbt_target'
 
     dbt_run_staging = BashOperator(
         task_id='dbt_run_staging',

@@ -12,6 +12,3 @@ USER airflow
 RUN pip install --no-cache-dir \
     dbt-core \
     dbt-athena-community
-
-    COPY --chown=airflow:root ../04_dbt_transform /opt/airflow/dbt_transform
-RUN cd /opt/airflow/dbt_transform && dbt deps

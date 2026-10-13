@@ -1,9 +1,3 @@
-{{
-    config(
-        materialized='view'
-    )
-}}
-
 with rentals as (
     select * from {{ ref('stg_rental') }}
 ),
