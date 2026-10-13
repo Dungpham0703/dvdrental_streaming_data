@@ -10,7 +10,13 @@
 with raw_rental as (
     select * from {{ source('raw', 'rental') }}
     {% if is_incremental() %}
-    where {{ debezium_ts_milies('__ts_ms') }} > (select max(cdc_capture_at) from {{ this }})
+    where {{ debezium_ts_milies('__ts_ms') }} >= (
+        select date_format(
+            date_add('hour', -1, date_parse(max(cdc_capture_at), '%Y-%m-%d %H:%i:%s.%f')),
+            '%Y-%m-%d %H:%i:%s.%f'
+        )
+        from {{ this }}
+    )
     {% endif %}
 ),
 

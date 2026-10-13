@@ -7,38 +7,48 @@ from airflow.operators.bash import BashOperator
 
 default_args = {
     'owner': 'tino_data',
-    'depends_on_past': False,
+    'depends_on_past': True,
     'email_on_failure': False,
     'email_on_retry': False,
-    'retries': 3,
-    'retry_delay': timedelta(minutes=5),
+    'retries': 1,           
+    'retry_delay': timedelta(minutes=3),
+    'execution_timeout': timedelta(minutes=12),
 }
 
 with DAG(
     'dbt_transform_dvdrental_dag',
     default_args=default_args,
-    description='A simple DAG to run dbt project every 15 minutes',
+    description='Production Lakehouse dbt Pipeline: Staging -> Snapshot SCD2 -> Mart -> Test',
     schedule_interval='*/15 * * * *',
     start_date=datetime(2023, 1, 1),
     catchup=False,
-    tags=['dbt', 'transform', 'dvdrental'],
+    max_active_runs=1,
+    tags=['dbt', 'transform', 'dvdrental', 'lakehouse', 'production'],
 ) as dag:
 
-    DBT_PROJECT_DIR = '/opt/airflow/dbt_transform'
-    DBT_PROFILES_DIR = '/opt/airflow/dbt_transform'
+    dbt_project_dir = '/opt/airflow/dbt_transform'
+    dbt_profiles_dir = '/opt/airflow/dbt_transform'
+    common_flags = f'--project-dir {dbt_project_dir} --profiles-dir {dbt_profiles_dir}'
 
-    dbt_deps = BashOperator(
-        task_id='dbt_deps',
-        bash_command=f'dbt deps --project-dir {DBT_PROJECT_DIR} --profiles-dir {DBT_PROFILES_DIR}'
+    dbt_run_staging = BashOperator(
+        task_id='dbt_run_staging',
+        bash_command=f'dbt run {common_flags} --select staging'
     )
-    dbt_run = BashOperator(
-        task_id='dbt_run',
-        bash_command=f'dbt run --project-dir {DBT_PROJECT_DIR} --profiles-dir {DBT_PROFILES_DIR}'
+
+    dbt_snapshot = BashOperator(
+        task_id='dbt_snapshot',
+        bash_command=f'dbt snapshot {common_flags}'
+    )
+
+    dbt_run_mart = BashOperator(
+        task_id='dbt_run_mart',
+        bash_command=f'dbt run {common_flags} --select mart'
     )
 
     dbt_test = BashOperator(
         task_id='dbt_test',
-        bash_command=f'dbt test --project-dir {DBT_PROJECT_DIR} --profiles-dir {DBT_PROFILES_DIR}'
+        bash_command=f'dbt test {common_flags}'
     )
-    
-    dbt_deps >> dbt_run >> dbt_test
+
+    dbt_run_staging >> dbt_snapshot >> dbt_run_mart >> dbt_test
+

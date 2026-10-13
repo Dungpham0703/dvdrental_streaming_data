@@ -106,9 +106,9 @@ def get_all_connectors_status(session: requests.Session, base_url: str = DEFAULT
                 logger.info(f"Connector [{name}] Status: {connector_state} | Tasks: {len(tasks)}")
                 for t in tasks:
                     if t.get("state") == "FAILED":
-                        logger.error(f"Task {t.get('id')} của [{name}] BỊ FAILED: {t.get('trace')[:200]}")
+                        logger.error(f"Task {t.get('id')} of [{name}] FAILED: {t.get('trace')[:200]}")
     except requests.RequestException as e:
-        logger.error(f"Không thể truy vấn trạng thái connectors: {e}")
+        logger.error(f"Failed to query connector status: {e}")
 
 if __name__ == "__main__":
     configs_dir = Path(__file__).parent / "connector_configs"

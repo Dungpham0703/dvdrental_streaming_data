@@ -10,7 +10,13 @@
 with raw_payment as (
     select * from {{ source('raw', 'payment') }}
     {% if is_incremental() %}
-    where {{ debezium_ts_milies('__ts_ms') }} > (select max(cdc_capture_at) from {{ this }})
+    where {{ debezium_ts_milies('__ts_ms') }} >= (
+        select date_format(
+            date_add('hour', -1, date_parse(max(cdc_capture_at), '%Y-%m-%d %H:%i:%s.%f')),
+            '%Y-%m-%d %H:%i:%s.%f'
+        )
+        from {{ this }}
+    )
     {% endif %}
 ),
 
@@ -33,7 +39,11 @@ filtered_payment as (
     from selected_columns_payment
     where (__deleted = false or __deleted is null)
       and amount > 0
-      and rental_id in (select rental_id from {{ ref('stg_rental') }})
+      -- LƯU Ý PRODUCTION:
+      -- Đã loại bỏ filter "and rental_id in (select rental_id from stg_rental)" tại Staging.
+      -- Lý do: Payment và Rental là 2 CDC stream bất đồng bộ. Nếu payment đến trước rental,
+      -- việc filter ở đây sẽ drop vĩnh viễn payment khỏi kho dữ liệu.
+      -- Quan hệ tham chiếu (Foreign Key) sẽ được xử lý an toàn tại tầng Mart (fct_payment).
 ),
 
 deduplicate_payment as (
@@ -52,3 +62,4 @@ select
     cdc_capture_at
 from deduplicate_payment
 where dup_rank = 1
+
