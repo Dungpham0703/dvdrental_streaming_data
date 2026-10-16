@@ -9,6 +9,7 @@ x-airflow-common: &airflow-common
     AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
     AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
     AWS_REGION: ${AWS_REGION}
+    SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL}
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs

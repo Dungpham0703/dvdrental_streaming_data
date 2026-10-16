@@ -22,8 +22,11 @@ from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlsplit
 
+# pyrefly: ignore [missing-import]
 import psycopg
 import requests
+
+# pyrefly: ignore [missing-import]
 from psycopg.types.json import Jsonb
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
@@ -225,7 +228,10 @@ def ensure_schema(conn: psycopg.Connection[Any]) -> None:
 
 
 def upsert_page(
-    conn: psycopg.Connection[Any], records: list[Any], logger: logging.Logger, page_number: int
+    conn: psycopg.Connection[Any],
+    records: list[Any],
+    logger: logging.Logger,
+    page_number: int,
 ) -> int:
     # Validate and serialize the whole page before opening its transaction.
     # Duplicate IDs with conflicting payloads are treated as a source-quality error.
@@ -244,7 +250,9 @@ def upsert_page(
                 record, ensure_ascii=False, sort_keys=True, separators=(",", ":")
             )
         except (TypeError, ValueError) as exc:
-            raise DataIngestionError("An API record could not be serialized as JSON") from exc
+            raise DataIngestionError(
+                "An API record could not be serialized as JSON"
+            ) from exc
 
         previous_payload = rows_by_id.get(source_id)
         if previous_payload is not None and previous_payload != payload_json:
@@ -253,7 +261,10 @@ def upsert_page(
             )
         rows_by_id[source_id] = payload_json
 
-    rows = [(source_id, Jsonb(json.loads(payload))) for source_id, payload in rows_by_id.items()]
+    rows = [
+        (source_id, Jsonb(json.loads(payload)))
+        for source_id, payload in rows_by_id.items()
+    ]
     if not rows:
         return 0
 
@@ -310,14 +321,20 @@ def ingest(
             return total_records
 
         if isinstance(next_cursor, bool) or not isinstance(next_cursor, (str, int)):
-            raise DataIngestionError("API next_cursor must be a string, integer, or null")
+            raise DataIngestionError(
+                "API next_cursor must be a string, integer, or null"
+            )
 
         cursor = str(next_cursor)
         if cursor in seen_cursors:
-            raise DataIngestionError("API repeated a pagination cursor; refusing an infinite loop")
+            raise DataIngestionError(
+                "API repeated a pagination cursor; refusing an infinite loop"
+            )
         seen_cursors.add(cursor)
 
-    raise DataIngestionError(f"API pagination exceeded the safety limit of {MAX_PAGES} pages")
+    raise DataIngestionError(
+        f"API pagination exceeded the safety limit of {MAX_PAGES} pages"
+    )
 
 
 def main() -> int:
@@ -343,14 +360,18 @@ def main() -> int:
         )
         return 0
     except AuthenticationError:
-        logger.exception("API authentication/authorization failed", extra={"event": "auth_failed"})
+        logger.exception(
+            "API authentication/authorization failed", extra={"event": "auth_failed"}
+        )
         return 2
     except DataIngestionError:
         logger.exception("Data ingestion failed", extra={"event": "ingestion_failed"})
         return 1
     except Exception:
         # Unexpected bugs and infrastructure failures must still be visible with a traceback.
-        logger.exception("Unexpected fatal pipeline error", extra={"event": "fatal_error"})
+        logger.exception(
+            "Unexpected fatal pipeline error", extra={"event": "fatal_error"}
+        )
         return 1
 
 
