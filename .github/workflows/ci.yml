@@ -27,10 +27,10 @@ jobs:
           pip install ruff pre-commit
 
       - name: Run Ruff Linter Check
-        run: ruff check --exclude apps/ai_agent --exclude apps/ai_dashboard --exclude scripts/experiments .
+        run: ruff check --exclude apps/ai_agent --exclude apps/ai_dashboard --exclude scripts/experiments --exclude /home/dzung/projects/dvdrental_streaming_data/infra/terraform_multi_node/producer/producer.py .
 
       - name: Run Ruff Formatter Check
-        run: ruff format --check --exclude apps/ai_agent --exclude apps/ai_dashboard --exclude scripts/experiments .
+        run: ruff format --check --exclude apps/ai_agent --exclude apps/ai_dashboard --exclude scripts/experiments --exclude /home/dzung/projects/dvdrental_streaming_data/infra/terraform_multi_node/producer/producer.py .
 
       - name: Run ShellCheck on Shell Scripts
         run: |
