@@ -298,7 +298,7 @@ def pump_worker(
 
                 try:
                     # Fire and forget with callback for error logging
-                    future = producer.send(topics[table], key=key, value=payload)
+                    producer.send(topics[table], key=key, value=payload)
                     # Optional: wait for it to succeed if strict ordering is required
                     # future.get(timeout=10)
                 except KafkaError as e:

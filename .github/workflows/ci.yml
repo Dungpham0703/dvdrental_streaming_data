@@ -27,10 +27,10 @@ jobs:
           pip install ruff pre-commit
 
       - name: Run Ruff Linter Check
-        run: ruff check --exclude apps/ai_agent --exclude apps/ai_dashboard .
+        run: ruff check --exclude apps/ai_agent --exclude apps/ai_dashboard --exclude scripts/experiments .
 
       - name: Run Ruff Formatter Check
-        run: ruff format --check --exclude apps/ai_agent --exclude apps/ai_dashboard .
+        run: ruff format --check --exclude apps/ai_agent --exclude apps/ai_dashboard --exclude scripts/experiments .
 
       - name: Run ShellCheck on Shell Scripts
         run: |

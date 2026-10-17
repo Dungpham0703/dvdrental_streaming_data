@@ -1,7 +1,7 @@
-import os
-import time
 import json
 import logging
+import os
+import time
 from datetime import datetime, timedelta
 
 # pyrefly: ignore [missing-import]
@@ -87,15 +87,14 @@ def run_athena_query(
         )
     except ClientError as e:
         error_code = e.response.get("Error", {}).get("Code", "Unknown")
-        logger.error(
-            f"Cannot submit Athena query: {str(e)}",
+        logger.exception(
+            "Cannot submit Athena query",
             extra={
                 "event": "query_submit_failed",
                 "database": database,
                 "table": table,
                 "error_code": error_code,
             },
-            exc_info=True,
         )
         raise
 
@@ -116,8 +115,8 @@ def run_athena_query(
                         "query_id": query_execution_id,
                     },
                 )
-            except Exception:
-                pass
+            except ClientError as cancel_err:
+                logger.debug("Failed to cancel query: %s", cancel_err)
             raise TimeoutError(
                 f"Athena query {query_execution_id} timeout after {elapsed:.1f}s (limit: {max_timeout_seconds}s)"
             )
@@ -242,15 +241,14 @@ def perform_iceberg_maintenance(**kwargs):
                                 "table": table_name,
                             },
                         )
-                    except Exception as tbl_err:
-                        logger.error(
-                            f"Error when maintaining table {database}.{table_name}: {str(tbl_err)}",
+                    except Exception:
+                        logger.exception(
+                            f"Error when maintaining table {database}.{table_name}",
                             extra={
                                 "event": "table_maintenance_error",
                                 "database": database,
                                 "table": table_name,
                             },
-                            exc_info=True,
                         )
                         failed_tables.append(f"{database}.{table_name}")
                 else:
@@ -262,11 +260,10 @@ def perform_iceberg_maintenance(**kwargs):
                             "table": table_name,
                         },
                     )
-        except Exception as db_err:
-            logger.error(
-                f"Error when accessing database {database}: {str(db_err)}",
+        except Exception:
+            logger.exception(
+                f"Error when accessing database {database}",
                 extra={"event": "database_error", "database": database},
-                exc_info=True,
             )
             failed_tables.append(f"DATABASE:{database}")
 

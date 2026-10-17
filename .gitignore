@@ -63,6 +63,8 @@ test_venv/
 # Scripts & Experiments
 scripts/setup/
 setup/
+scripts/experiments/pyspark_duckdb/*
+pyspark_duckdb/*
 scripts/experiments/xyz/*
 xyz/*
 scripts/benchmark/pumping_scripts/*

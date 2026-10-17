@@ -3,12 +3,12 @@ import logging
 import os
 import urllib.error
 import urllib.request
-from typing import Any, Dict
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-def send_pipeline_alert(context: Dict[str, Any]) -> None:
+def send_pipeline_alert(context: dict[str, Any]) -> None:
     ti = context.get("task_instance")
     dag_id = ti.dag_id if ti else "Unknown_DAG"
     task_id = ti.task_id if ti else "Unknown_Task"
