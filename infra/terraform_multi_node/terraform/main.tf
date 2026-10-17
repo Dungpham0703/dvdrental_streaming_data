@@ -309,6 +309,85 @@ resource "aws_instance" "producer" {
 }
 
 # -----------------------------------------------------------------------------
+# Airflow Orchestrator Node
+# -----------------------------------------------------------------------------
+resource "aws_security_group" "airflow" {
+  name        = "airflow_orchestrator_sg_${random_id.bucket_suffix.hex}"
+  description = "Security group for Airflow Orchestrator EC2"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    description = "Airflow Webserver UI"
+    from_port   = 8080
+    to_port     = 8080
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "SSH"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "Internal VPC traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["172.31.16.0/24"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "Airflow-SG"
+  }
+}
+
+resource "aws_instance" "airflow" {
+  ami                    = data.aws_ami.amazon_linux_2023.id
+  instance_type          = var.instance_type_cluster
+  subnet_id              = aws_subnet.main.id
+  private_ip             = cidrhost(aws_subnet.main.cidr_block, 130)
+  vpc_security_group_ids = [aws_security_group.airflow.id]
+  iam_instance_profile   = aws_iam_instance_profile.airflow_profile.name
+
+  root_block_device {
+    volume_size           = 30
+    volume_type           = "gp3"
+    delete_on_termination = true
+  }
+
+  user_data = <<-EOF
+    #!/bin/bash
+    set -euo pipefail
+    exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+
+    echo "[*] Installing Docker and Git..."
+    sudo dnf install -y docker git
+    systemctl enable --now docker
+    usermod -aG docker ec2-user
+
+    DOCKER_CONFIG=$${DOCKER_CONFIG:-/usr/local/lib/docker}
+    mkdir -p $DOCKER_CONFIG/cli-plugins
+    curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 -o $DOCKER_CONFIG/cli-plugins/docker-compose
+    chmod +x $DOCKER_CONFIG/cli-plugins/docker-compose
+  EOF
+
+  tags = {
+    Name = "Airflow-Orchestrator-Node"
+  }
+}
+
+# -----------------------------------------------------------------------------
 # Outputs
 # -----------------------------------------------------------------------------
 output "kafka_bootstrap_servers" {
@@ -325,6 +404,18 @@ output "spark_master_ip" {
 
 output "producer_ip" {
   value = aws_instance.producer.private_ip
+}
+
+output "airflow_private_ip" {
+  value = aws_instance.airflow.private_ip
+}
+
+output "airflow_public_ip" {
+  value = aws_instance.airflow.public_ip
+}
+
+output "airflow_web_ui" {
+  value = "http://${aws_instance.airflow.public_ip}:8080"
 }
 
 output "s3_bucket_name" {

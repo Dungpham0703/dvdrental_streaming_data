@@ -66,3 +66,64 @@ jobs:
           name: airflow-dags
           path: build/airflow-dags.tar.gz
           retention-days: 7
+
+  deploy-to-ec2:
+    name: Deploy Airflow to EC2
+    needs: [build-airflow-image, package-dags]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Deployment Secrets
+        id: check-secrets
+        run: |
+          if [ -z "${{ secrets.EC2_AIRFLOW_HOST }}" ] || [ -z "${{ secrets.EC2_SSH_KEY }}" ]; then
+            echo "configured=false" >> $GITHUB_OUTPUT
+            echo "::notice::EC2_AIRFLOW_HOST or EC2_SSH_KEY is not configured in GitHub Secrets. Skipping automated EC2 deployment step."
+          else
+            echo "configured=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Deploy via SSH to Airflow EC2
+        if: steps.check-secrets.outputs.configured == 'true'
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_AIRFLOW_HOST }}
+          username: ${{ secrets.EC2_USER || 'ec2-user' }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: ${{ secrets.EC2_PORT || 22 }}
+          script: |
+            set -e
+            echo "================================================="
+            echo " Deploying Airflow to EC2 (${{ github.repository }})"
+            echo " Time: $(date)"
+            echo "================================================="
+
+            APP_DIR="$HOME/dvdrental_streaming_data"
+            if [ ! -d "$APP_DIR" ]; then
+              echo "[*] Cloning repository into $APP_DIR..."
+              git clone https://github.com/${{ github.repository }}.git "$APP_DIR"
+            else
+              echo "[*] Pulling latest repository changes..."
+              cd "$APP_DIR"
+              git fetch origin main
+              git checkout main
+              git pull origin main
+            fi
+
+            cd "$APP_DIR/pipelines/airflow"
+
+            echo "[*] Authenticating with GitHub Container Registry..."
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            echo "[*] Pulling latest Airflow Docker image..."
+            docker pull ghcr.io/${{ github.repository }}/airflow:latest
+
+            echo "[*] Starting/restarting Airflow services..."
+            docker compose pull || true
+            docker compose up -d --force-recreate
+
+            echo "[*] Checking container status..."
+            docker compose ps
+
+            echo "================================================="
+            echo " Airflow deployment completed successfully!"
+            echo "================================================="
