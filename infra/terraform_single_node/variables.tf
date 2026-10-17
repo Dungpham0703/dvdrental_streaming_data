@@ -64,3 +64,24 @@ variable "s3_bucket_name" {
   type        = string
   default     = "dvdrental-hudi-lake-dzung-2026"
 }
+
+# ------ Airflow Variables ------
+variable "airflow_admin_username" {
+  description = "Airflow web UI admin username"
+  type        = string
+  default     = "s3cret"
+}
+
+variable "airflow_admin_password" {
+  description = "Airflow web UI admin password"
+  type        = string
+  sensitive   = true
+  default     = "s3cret"
+}
+
+variable "slack_webhook_url" {
+  description = "Slack webhook URL for Airflow alerts"
+  type        = string
+  sensitive   = true
+  default     = ""
+}

@@ -350,6 +350,48 @@ resource "aws_instance" "producer" {
     chmod +x $DOCKER_CONFIG/cli-plugins/docker-compose
 
     pip3 install boto3 kafka-python lz4
+
+    echo "[*] Cloning dvdrental repository..."
+    APP_DIR="/home/ec2-user/dvdrental_streaming_data"
+    if [ ! -d "$APP_DIR" ]; then
+      git clone https://github.com/Dungpham0703/dvdrental_streaming_data.git "$APP_DIR"
+    else
+      cd "$APP_DIR" && git pull origin main
+    fi
+
+    echo "[*] Configuring Airflow environment..."
+    mkdir -p /home/ec2-user/.aws "$APP_DIR/pipelines/airflow/logs" "$APP_DIR/pipelines/airflow/plugins"
+
+    echo "[*] Fetching Airflow secrets from Secrets Manager..."
+    AIRFLOW_SECRET=$(aws secretsmanager get-secret-value \
+      --secret-id dvdrental/airflow_config \
+      --region ${data.aws_region.current.name} \
+      --query SecretString --output text)
+
+    AIRFLOW_USER=$(echo "$AIRFLOW_SECRET" | jq -r '.airflow_admin_username')
+    AIRFLOW_PASS=$(echo "$AIRFLOW_SECRET" | jq -r '.airflow_admin_password')
+    SLACK_URL=$(echo "$AIRFLOW_SECRET" | jq -r '.slack_webhook_url')
+
+    cat > "$APP_DIR/pipelines/airflow/.env" <<ENVEOF
+AIRFLOW_UID=50000
+AWS_REGION=${data.aws_region.current.name}
+ATHENA_S3_OUTPUT=s3://${data.aws_s3_bucket.hudi_data.bucket}/bronze/athena-results/
+_AIRFLOW_WWW_USER_USERNAME=$AIRFLOW_USER
+_AIRFLOW_WWW_USER_PASSWORD=$AIRFLOW_PASS
+AIRFLOW__AWS__S3_BUCKET_NAME=s3://${data.aws_s3_bucket.hudi_data.bucket}/bronze/athena-results/
+SLACK_WEBHOOK_URL=$SLACK_URL
+ENVEOF
+
+    chown -R ec2-user:ec2-user "$APP_DIR" /home/ec2-user/.aws
+    chmod -R 777 "$APP_DIR/pipelines/airflow/logs" "$APP_DIR/pipelines/airflow/plugins"
+
+    echo "[*] Building Airflow image..."
+    export HOME=/home/ec2-user
+    cd "$APP_DIR/pipelines/airflow"
+    docker build -t ghcr.io/dungpham0703/dvdrental_streaming_data/airflow:latest .
+
+    echo "[*] Starting Airflow services via Docker Compose..."
+    docker compose up -d
   EOF
 
   tags = {

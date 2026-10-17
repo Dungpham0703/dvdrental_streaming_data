@@ -345,6 +345,47 @@ resource "aws_iam_instance_profile" "ec2_profile" {
   role = aws_iam_role.ec2_role.name
 }
 
+# Secrets Manager for Airflow Sensitive Config
+resource "aws_secretsmanager_secret" "airflow_config" {
+  name                    = "${var.project_name}/airflow_config"
+  description             = "Airflow credentials and integration secrets"
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "airflow_config" {
+  secret_id = aws_secretsmanager_secret.airflow_config.id
+  secret_string = jsonencode({
+    airflow_admin_username = var.airflow_admin_username
+    airflow_admin_password = var.airflow_admin_password
+    slack_webhook_url      = var.slack_webhook_url
+  })
+}
+
+resource "aws_iam_policy" "secrets_read" {
+  name        = "${var.project_name}-secrets-read"
+  description = "Allow EC2 to read Airflow secrets from Secrets Manager"
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret"
+        ]
+        Resource = [
+          aws_secretsmanager_secret.airflow_config.arn
+        ]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "secrets_access" {
+  role       = aws_iam_role.ec2_role.name
+  policy_arn = aws_iam_policy.secrets_read.arn
+}
+
 ###############################################################
 # EC2 KEY PAIR
 ###############################################################
@@ -459,7 +500,61 @@ resource "aws_instance" "airflow" {
   key_name               = aws_key_pair.dvdrental.key_name
   iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
 
-  user_data = local.docker_install_script
+  user_data = <<-EOF
+    #!/bin/bash
+    set -euo pipefail
+    exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+
+    dnf update -y
+    dnf install -y docker git aws-cli jq
+    systemctl enable docker
+    systemctl start docker
+    usermod -aG docker ec2-user
+    curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 -o /usr/local/bin/docker-compose
+    chmod +x /usr/local/bin/docker-compose
+
+    echo "[*] Cloning dvdrental repository..."
+    APP_DIR="/home/ec2-user/dvdrental_streaming_data"
+    if [ ! -d "$APP_DIR" ]; then
+      git clone https://github.com/Dungpham0703/dvdrental_streaming_data.git "$APP_DIR"
+    else
+      cd "$APP_DIR" && git pull origin main
+    fi
+
+    echo "[*] Configuring Airflow environment..."
+    mkdir -p /home/ec2-user/.aws "$APP_DIR/pipelines/airflow/logs" "$APP_DIR/pipelines/airflow/plugins"
+
+    echo "[*] Fetching Airflow secrets from Secrets Manager..."
+    AIRFLOW_SECRET=$(aws secretsmanager get-secret-value \
+      --secret-id ${aws_secretsmanager_secret.airflow_config.name} \
+      --region ${var.aws_region} \
+      --query SecretString --output text)
+
+    AIRFLOW_USER=$(echo "$AIRFLOW_SECRET" | jq -r '.airflow_admin_username')
+    AIRFLOW_PASS=$(echo "$AIRFLOW_SECRET" | jq -r '.airflow_admin_password')
+    SLACK_URL=$(echo "$AIRFLOW_SECRET" | jq -r '.slack_webhook_url')
+
+    cat > "$APP_DIR/pipelines/airflow/.env" <<ENVEOF
+AIRFLOW_UID=50000
+AWS_REGION=${var.aws_region}
+ATHENA_S3_OUTPUT=s3://${aws_s3_bucket.data_lake.bucket}/bronze/athena-results/
+_AIRFLOW_WWW_USER_USERNAME=$AIRFLOW_USER
+_AIRFLOW_WWW_USER_PASSWORD=$AIRFLOW_PASS
+AIRFLOW__AWS__S3_BUCKET_NAME=s3://${aws_s3_bucket.data_lake.bucket}/bronze/athena-results/
+SLACK_WEBHOOK_URL=$SLACK_URL
+ENVEOF
+
+    chown -R ec2-user:ec2-user "$APP_DIR" /home/ec2-user/.aws
+    chmod -R 777 "$APP_DIR/pipelines/airflow/logs" "$APP_DIR/pipelines/airflow/plugins"
+
+    echo "[*] Building Airflow image..."
+    export HOME=/home/ec2-user
+    cd "$APP_DIR/pipelines/airflow"
+    docker build -t ghcr.io/dungpham0703/dvdrental_streaming_data/airflow:latest .
+
+    echo "[*] Starting Airflow services via Docker Compose..."
+    docker compose up -d
+  EOF
 
   root_block_device {
     volume_type           = "gp3"

@@ -35,6 +35,21 @@ resource "aws_secretsmanager_secret_version" "s3_config" {
     region      = data.aws_region.current.name
   })
 }
+# Secret 3: Airflow Sensitive Config (admin credentials, Slack webhook)
+resource "aws_secretsmanager_secret" "airflow_config" {
+  name                    = "dvdrental/airflow_config"
+  description             = "Airflow admin credentials and integration secrets"
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "airflow_config" {
+  secret_id = aws_secretsmanager_secret.airflow_config.id
+  secret_string = jsonencode({
+    airflow_admin_username = var.airflow_admin_username
+    airflow_admin_password = var.airflow_admin_password
+    slack_webhook_url      = var.slack_webhook_url
+  })
+}
 
 # Grant read access for secrets to Spark, Kafka, and Producer nodes
 resource "aws_iam_policy" "read_dvdrental_secrets" {
@@ -51,7 +66,8 @@ resource "aws_iam_policy" "read_dvdrental_secrets" {
         ]
         Resource = [
           aws_secretsmanager_secret.kafka_bootstrap.arn,
-          aws_secretsmanager_secret.s3_config.arn
+          aws_secretsmanager_secret.s3_config.arn,
+          aws_secretsmanager_secret.airflow_config.arn
         ]
       }
     ]
@@ -80,4 +96,8 @@ output "secret_kafka_arn" {
 
 output "secret_s3_arn" {
   value = aws_secretsmanager_secret.s3_config.arn
+}
+
+output "secret_airflow_arn" {
+  value = aws_secretsmanager_secret.airflow_config.arn
 }
