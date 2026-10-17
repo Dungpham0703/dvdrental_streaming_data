@@ -17,7 +17,6 @@ from kafka import KafkaProducer
 from kafka.errors import KafkaError
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-# Setup Production-grade Logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] (Worker-%(process)d) - %(message)s",
@@ -26,7 +25,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# === READ CONFIG FROM AWS SECRETS MANAGER ===
 @retry(
     stop=stop_after_attempt(5),
     wait=wait_exponential(multiplier=1, min=2, max=10),
@@ -47,7 +45,7 @@ def load_config() -> dict:
         topic_prefix = kafka_secret.get("topic_prefix")
     except Exception as e:
         logger.error(f"Could not read secret after multiple retries. Error: {e}")
-        raise  # Fail-fast principle in Production
+        raise
 
     config = {
         "bootstrap_servers": bootstrap_servers,
@@ -57,7 +55,6 @@ def load_config() -> dict:
     return config
 
 
-# === KAFKA PRODUCER ===
 @retry(
     stop=stop_after_attempt(5),
     wait=wait_exponential(multiplier=1, min=2, max=10),
@@ -69,11 +66,11 @@ def get_producer(bootstrap_servers: str) -> KafkaProducer:
         bootstrap_servers=bootstrap_servers.split(","),
         value_serializer=lambda v: json.dumps(v).encode("utf-8"),
         key_serializer=lambda k: str(k).encode("utf-8"),
-        linger_ms=50,  # Batching for higher throughput
-        batch_size=131072,  # 128KB batch
+        linger_ms=50,
+        batch_size=131072,
         compression_type="lz4",
-        acks="all",  # PRODUCTION: Changed from 1 to 'all' for Exactly-once/No data loss
-        retries=5,  # PRODUCTION: Allow Kafka client to retry internally
+        acks="all",
+        retries=5,
     )
 
 
@@ -268,7 +265,6 @@ def pump_worker(
         "store",
     ]
 
-    # Pre-compute topic names
     topics = {t: f"{topic_prefix}.{t}" for t in tables}
 
     start_id = worker_id * messages_per_worker
@@ -288,7 +284,6 @@ def pump_worker(
             for table in tables:
                 payload = generate_mock_payload(table, current_id, ts_ms, event_time)
 
-                # Determine key (use id or composite id)
                 if table == "film_actor":
                     key = f"{payload['actor_id']},{payload['film_id']}"
                 elif table == "film_category":
@@ -297,10 +292,7 @@ def pump_worker(
                     key = str(current_id)
 
                 try:
-                    # Fire and forget with callback for error logging
                     producer.send(topics[table], key=key, value=payload)
-                    # Optional: wait for it to succeed if strict ordering is required
-                    # future.get(timeout=10)
                 except KafkaError as e:
                     logger.error(f"Failed to send message to {topics[table]}: {e}")
 
@@ -323,7 +315,6 @@ def pump_worker(
         logger.info(f"Done! Total {count * 15:,} messages in {elapsed:.1f}s")
 
 
-# === MAIN ===
 def main():
     config = load_config()
 

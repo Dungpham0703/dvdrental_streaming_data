@@ -1,20 +1,9 @@
 import json
 from pathlib import Path
 
-# Paths setup
 BASE_DIR = Path(__file__).resolve().parents[2]
 DBT_MART_PATH = BASE_DIR / "pipelines" / "dbt" / "models" / "mart"
 OUTPUT_FILE = Path(__file__).resolve().parent / "semantic_dictionary.json"
-
-# =========================================================
-# COMPLETE column definitions extracted from actual SQL models
-# AWS Athena (Presto/Trino SQL / Glue Catalog) standard data types:
-# - STRING (chuỗi ký tự)
-# - INTEGER / BIGINT (số nguyên)
-# - DOUBLE (số thực)
-# - TIMESTAMP / DATE (thời gian)
-# - BOOLEAN (đúng/sai)
-# =========================================================
 
 COMPLETE_TABLE_DEFINITIONS = {
     "fct_payment": {
@@ -526,9 +515,6 @@ COMPLETE_TABLE_DEFINITIONS = {
     },
 }
 
-# =========================================================
-# JOIN guide — explicit join paths for the AI to follow
-# =========================================================
 JOIN_GUIDE = [
     {
         "purpose": "Doanh thu theo khách hàng",
@@ -565,8 +551,6 @@ JOIN_GUIDE = [
 
 def generate_semantic_dictionary():
     """Build the complete Semantic Layer JSON from ground-truth table definitions."""
-
-    # Convert to format suitable for the AI prompt
     tables_data = {}
     for table_name, table_def in COMPLETE_TABLE_DEFINITIONS.items():
         tables_data[table_name] = {
@@ -600,7 +584,6 @@ def generate_semantic_dictionary():
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         json.dump(semantic_layer, f, ensure_ascii=False, indent=2)
 
-    # Print summary
     print(f"\n{'='*60}")
     print("  SEMANTIC DICTIONARY — EXTRACTION REPORT")
     print(f"{'='*60}")

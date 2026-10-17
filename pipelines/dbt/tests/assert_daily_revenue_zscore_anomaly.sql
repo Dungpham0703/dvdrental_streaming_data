@@ -33,7 +33,6 @@ with
                 else 0.0
             end as z_score
         from revenue_with_stats
-        -- Chỉ kiểm tra trong phạm vi các ngày gần nhất để tối ưu hiệu năng Athena scan
         where payment_date_day >= date_add('day', -7, current_date)
     )
 

@@ -1,8 +1,5 @@
 #!/bin/bash
 
-# ==============================================================================
-# DVD Rental - Continuous Stress Test Runner for Linux (EC2)
-# ==============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR" || exit 1
