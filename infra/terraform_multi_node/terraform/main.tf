@@ -277,43 +277,11 @@ resource "aws_instance" "spark_worker" {
 }
 
 # -----------------------------------------------------------------------------
-# EC2 Producer Node
+# Producer + Airflow Orchestrator Node
 # -----------------------------------------------------------------------------
-resource "aws_instance" "producer" {
-  ami                    = data.aws_ami.amazon_linux_2023.id
-  instance_type          = var.instance_type_cluster
-  subnet_id              = aws_subnet.main.id
-  private_ip             = cidrhost(aws_subnet.main.cidr_block, 120)
-  vpc_security_group_ids = [aws_security_group.allow_all_internal.id]
-  iam_instance_profile   = aws_iam_instance_profile.producer_profile.name
-
-  root_block_device {
-    volume_size           = 30
-    volume_type           = "gp3"
-    delete_on_termination = true
-  }
-
-  user_data = <<-EOF
-    #!/bin/bash
-    set -euo pipefail
-    exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
-
-    echo "[*] Installing dependencies..."
-    sudo dnf install -y python3-pip aws-cli gcc python3-devel
-    pip3 install boto3 kafka-python lz4
-  EOF
-
-  tags = {
-    Name = "Kafka-Producer-Node"
-  }
-}
-
-# -----------------------------------------------------------------------------
-# Airflow Orchestrator Node
-# -----------------------------------------------------------------------------
-resource "aws_security_group" "airflow" {
-  name        = "airflow_orchestrator_sg_${random_id.bucket_suffix.hex}"
-  description = "Security group for Airflow Orchestrator EC2"
+resource "aws_security_group" "producer_airflow" {
+  name        = "producer_airflow_sg_${random_id.bucket_suffix.hex}"
+  description = "Security group for combined Producer + Airflow EC2"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -348,17 +316,17 @@ resource "aws_security_group" "airflow" {
   }
 
   tags = {
-    Name = "Airflow-SG"
+    Name = "Producer-Airflow-SG"
   }
 }
 
-resource "aws_instance" "airflow" {
+resource "aws_instance" "producer" {
   ami                    = data.aws_ami.amazon_linux_2023.id
   instance_type          = var.instance_type_cluster
   subnet_id              = aws_subnet.main.id
-  private_ip             = cidrhost(aws_subnet.main.cidr_block, 130)
-  vpc_security_group_ids = [aws_security_group.airflow.id]
-  iam_instance_profile   = aws_iam_instance_profile.airflow_profile.name
+  private_ip             = cidrhost(aws_subnet.main.cidr_block, 120)
+  vpc_security_group_ids = [aws_security_group.producer_airflow.id]
+  iam_instance_profile   = aws_iam_instance_profile.producer_profile.name
 
   root_block_device {
     volume_size           = 30
@@ -371,8 +339,8 @@ resource "aws_instance" "airflow" {
     set -euo pipefail
     exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
 
-    echo "[*] Installing Docker and Git..."
-    sudo dnf install -y docker git
+    echo "[*] Installing Docker, Git, Python & dependencies..."
+    sudo dnf install -y docker git python3-pip aws-cli gcc python3-devel
     systemctl enable --now docker
     usermod -aG docker ec2-user
 
@@ -380,10 +348,12 @@ resource "aws_instance" "airflow" {
     mkdir -p $DOCKER_CONFIG/cli-plugins
     curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 -o $DOCKER_CONFIG/cli-plugins/docker-compose
     chmod +x $DOCKER_CONFIG/cli-plugins/docker-compose
+
+    pip3 install boto3 kafka-python lz4
   EOF
 
   tags = {
-    Name = "Airflow-Orchestrator-Node"
+    Name = "Producer-Airflow-Node"
   }
 }
 
@@ -407,15 +377,15 @@ output "producer_ip" {
 }
 
 output "airflow_private_ip" {
-  value = aws_instance.airflow.private_ip
+  value = aws_instance.producer.private_ip
 }
 
 output "airflow_public_ip" {
-  value = aws_instance.airflow.public_ip
+  value = aws_instance.producer.public_ip
 }
 
 output "airflow_web_ui" {
-  value = "http://${aws_instance.airflow.public_ip}:8080"
+  value = "http://${aws_instance.producer.public_ip}:8080"
 }
 
 output "s3_bucket_name" {

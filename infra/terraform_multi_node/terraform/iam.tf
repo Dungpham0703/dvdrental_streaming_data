@@ -139,6 +139,11 @@ resource "aws_iam_role_policy_attachment" "producer_secrets_attach" {
   policy_arn = aws_iam_policy.producer_secrets.arn
 }
 
+resource "aws_iam_role_policy_attachment" "producer_athena_glue_attach" {
+  role       = aws_iam_role.producer_role.name
+  policy_arn = aws_iam_policy.airflow_athena_glue.arn
+}
+
 resource "aws_iam_instance_profile" "producer_profile" {
   name = "Kafka_Producer_Profile_${random_id.bucket_suffix.hex}"
   role = aws_iam_role.producer_role.name
