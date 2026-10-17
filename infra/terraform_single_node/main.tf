@@ -22,14 +22,14 @@ provider "aws" {
 # DATA SOURCES
 ###############################################################
 
-# Fetch the latest Amazon Linux 2023 AMI automatically
-data "aws_ami" "amazon_linux_2023" {
+# Fetch the latest Ubuntu 24.04 LTS AMI automatically
+data "aws_ami" "ubuntu" {
   most_recent = true
-  owners      = ["amazon"]
+  owners      = ["099720109477"] # Canonical
 
   filter {
     name   = "name"
-    values = ["al2023-ami-2023.*-x86_64"]
+    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"]
   }
 
   filter {
@@ -403,24 +403,24 @@ resource "aws_key_pair" "dvdrental" {
 # EC2 INSTANCES
 ###############################################################
 
-# User data script: installs Docker & Docker Compose on Amazon Linux 2023
+# User data script: installs Docker & Docker Compose on Ubuntu
 locals {
   docker_install_script = <<-EOF
     #!/bin/bash
-    dnf update -y
-    dnf install -y docker git
-    systemctl enable docker
-    systemctl start docker
-    usermod -aG docker ec2-user
-    curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 -o /usr/local/bin/docker-compose
-    chmod +x /usr/local/bin/docker-compose
-    ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
+    set -euo pipefail
+    exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -y
+    apt-get install -y docker.io docker-compose-v2 git awscli jq python3-pip
+    systemctl enable --now docker
+    usermod -aG docker ubuntu
   EOF
 }
 
 # --- Instance 1: Kafka Zookeeper/Controller ---
 resource "aws_instance" "kafka_controller" {
-  ami                    = data.aws_ami.amazon_linux_2023.id
+  ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.instance_type
   subnet_id              = aws_subnet.public.id
   vpc_security_group_ids = [aws_security_group.kafka.id]
@@ -445,7 +445,7 @@ resource "aws_instance" "kafka_controller" {
 # --- Instance 1.1: Kafka Brokers (Workers) ---
 resource "aws_instance" "kafka_broker" {
   count                  = 3
-  ami                    = data.aws_ami.amazon_linux_2023.id
+  ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.instance_type
   subnet_id              = aws_subnet.public.id
   vpc_security_group_ids = [aws_security_group.kafka.id]
@@ -469,7 +469,7 @@ resource "aws_instance" "kafka_broker" {
 
 # --- Instance 2: Debezium ---
 resource "aws_instance" "debezium" {
-  ami                    = data.aws_ami.amazon_linux_2023.id
+  ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.instance_type
   subnet_id              = aws_subnet.public.id
   vpc_security_group_ids = [aws_security_group.debezium.id]
@@ -493,28 +493,32 @@ resource "aws_instance" "debezium" {
 
 # --- Instance 2.1: Airflow Orchestrator ---
 resource "aws_instance" "airflow" {
-  ami                    = data.aws_ami.amazon_linux_2023.id
+  ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.instance_type
   subnet_id              = aws_subnet.public.id
   vpc_security_group_ids = [aws_security_group.airflow.id]
   key_name               = aws_key_pair.dvdrental.key_name
   iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
 
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "optional"
+    http_put_response_hop_limit = 2
+  }
+
   user_data = <<-EOF
     #!/bin/bash
     set -euo pipefail
     exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
 
-    dnf update -y
-    dnf install -y docker git aws-cli jq
-    systemctl enable docker
-    systemctl start docker
-    usermod -aG docker ec2-user
-    curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 -o /usr/local/bin/docker-compose
-    chmod +x /usr/local/bin/docker-compose
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -y
+    apt-get install -y docker.io docker-compose-v2 git awscli jq python3-pip build-essential
+    systemctl enable --now docker
+    usermod -aG docker ubuntu
 
     echo "[*] Cloning dvdrental repository..."
-    APP_DIR="/home/ec2-user/dvdrental_streaming_data"
+    APP_DIR="/home/ubuntu/dvdrental_streaming_data"
     if [ ! -d "$APP_DIR" ]; then
       git clone https://github.com/Dungpham0703/dvdrental_streaming_data.git "$APP_DIR"
     else
@@ -522,7 +526,7 @@ resource "aws_instance" "airflow" {
     fi
 
     echo "[*] Configuring Airflow environment..."
-    mkdir -p /home/ec2-user/.aws "$APP_DIR/pipelines/airflow/logs" "$APP_DIR/pipelines/airflow/plugins"
+    mkdir -p /home/ubuntu/.aws "$APP_DIR/pipelines/airflow/logs" "$APP_DIR/pipelines/airflow/plugins"
 
     echo "[*] Fetching Airflow secrets from Secrets Manager..."
     AIRFLOW_SECRET=$(aws secretsmanager get-secret-value \
@@ -544,15 +548,12 @@ AIRFLOW__AWS__S3_BUCKET_NAME=s3://${aws_s3_bucket.data_lake.bucket}/bronze/athen
 SLACK_WEBHOOK_URL=$SLACK_URL
 ENVEOF
 
-    chown -R ec2-user:ec2-user "$APP_DIR" /home/ec2-user/.aws
+    chown -R ubuntu:ubuntu "$APP_DIR" /home/ubuntu/.aws
     chmod -R 777 "$APP_DIR/pipelines/airflow/logs" "$APP_DIR/pipelines/airflow/plugins"
 
-    echo "[*] Building Airflow image..."
-    export HOME=/home/ec2-user
-    cd "$APP_DIR/pipelines/airflow"
-    docker build -t ghcr.io/dungpham0703/dvdrental_streaming_data/airflow:latest .
-
     echo "[*] Starting Airflow services via Docker Compose..."
+    cd "$APP_DIR/pipelines/airflow"
+    docker compose build
     docker compose up -d
   EOF
 
@@ -571,7 +572,7 @@ ENVEOF
 
 # --- Instance 3: Hudi Streamer (Master) ---
 resource "aws_instance" "hudi_master" {
-  ami                    = data.aws_ami.amazon_linux_2023.id
+  ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.instance_type
   subnet_id              = aws_subnet.public.id
   vpc_security_group_ids = [aws_security_group.hudi_streamer.id]
@@ -596,7 +597,7 @@ resource "aws_instance" "hudi_master" {
 # --- Instance 3.1: Hudi Streamer (Workers) ---
 resource "aws_instance" "hudi_worker" {
   count                  = 3
-  ami                    = data.aws_ami.amazon_linux_2023.id
+  ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.instance_type
   subnet_id              = aws_subnet.public.id
   vpc_security_group_ids = [aws_security_group.hudi_streamer.id]

@@ -100,12 +100,18 @@ resource "aws_security_group" "allow_all_internal" {
   }
 }
 
-data "aws_ami" "amazon_linux_2023" {
+data "aws_ami" "ubuntu" {
   most_recent = true
-  owners      = ["amazon"]
+  owners      = ["099720109477"] # Canonical
+
   filter {
     name   = "name"
-    values = ["al2023-ami-2023.*-x86_64"]
+    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
   }
 }
 
@@ -120,7 +126,7 @@ variable "instance_type_cluster" {
 # -----------------------------------------------------------------------------
 resource "aws_instance" "kafka" {
   count                  = 3
-  ami                    = data.aws_ami.amazon_linux_2023.id
+  ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.instance_type_cluster
   subnet_id              = aws_subnet.main.id
   private_ip             = cidrhost(aws_subnet.main.cidr_block, 100 + count.index)
@@ -138,10 +144,12 @@ resource "aws_instance" "kafka" {
     set -euo pipefail
     exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
 
-    echo "[*] Installing Docker..."
-    sudo dnf install -y docker
+    echo "[*] Installing Docker on Ubuntu..."
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -y
+    apt-get install -y docker.io
     systemctl enable --now docker
-    usermod -aG docker ec2-user
+    usermod -aG docker ubuntu
 
     MY_IP="${cidrhost(aws_subnet.main.cidr_block, 100 + count.index)}"
     KAFKA_1_IP="${cidrhost(aws_subnet.main.cidr_block, 100)}"
@@ -181,7 +189,7 @@ resource "aws_instance" "kafka" {
 # Spark Cluster (1 Master + 3 Workers)
 # -----------------------------------------------------------------------------
 resource "aws_instance" "spark_master" {
-  ami                    = data.aws_ami.amazon_linux_2023.id
+  ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.instance_type_cluster
   subnet_id              = aws_subnet.main.id
   private_ip             = cidrhost(aws_subnet.main.cidr_block, 110)
@@ -199,11 +207,13 @@ resource "aws_instance" "spark_master" {
     set -euo pipefail
     exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
 
-    echo "[*] Installing Docker, python & aws-cli..."
-    sudo dnf install -y docker aws-cli python3-pip
-    pip3 install boto3 kafka-python
+    echo "[*] Installing Docker, Python & AWS CLI on Ubuntu..."
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -y
+    apt-get install -y docker.io awscli python3-pip
+    pip3 install boto3 kafka-python --break-system-packages || pip3 install boto3 kafka-python
     systemctl enable --now docker
-    usermod -aG docker ec2-user
+    usermod -aG docker ubuntu
 
     MASTER_IP="${cidrhost(aws_subnet.main.cidr_block, 110)}"
     mkdir -p /opt/hudi-configs /opt/hudi-jars
@@ -230,7 +240,7 @@ resource "aws_instance" "spark_master" {
 
 resource "aws_instance" "spark_worker" {
   count                  = 3
-  ami                    = data.aws_ami.amazon_linux_2023.id
+  ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.instance_type_cluster
   subnet_id              = aws_subnet.main.id
   private_ip             = cidrhost(aws_subnet.main.cidr_block, 111 + count.index)
@@ -248,11 +258,13 @@ resource "aws_instance" "spark_worker" {
     set -euo pipefail
     exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
 
-    echo "[*] Installing Docker..."
-    sudo dnf install -y docker python3-pip
-    pip3 install boto3 kafka-python
+    echo "[*] Installing Docker on Ubuntu..."
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -y
+    apt-get install -y docker.io python3-pip
+    pip3 install boto3 kafka-python --break-system-packages || pip3 install boto3 kafka-python
     systemctl enable --now docker
-    usermod -aG docker ec2-user
+    usermod -aG docker ubuntu
 
     MASTER_IP="${cidrhost(aws_subnet.main.cidr_block, 110)}"
 
@@ -321,7 +333,7 @@ resource "aws_security_group" "producer_airflow" {
 }
 
 resource "aws_instance" "producer" {
-  ami                    = data.aws_ami.amazon_linux_2023.id
+  ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.instance_type_cluster
   subnet_id              = aws_subnet.main.id
   private_ip             = cidrhost(aws_subnet.main.cidr_block, 120)
@@ -334,25 +346,29 @@ resource "aws_instance" "producer" {
     delete_on_termination = true
   }
 
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "optional"
+    http_put_response_hop_limit = 2
+  }
+
   user_data = <<-EOF
     #!/bin/bash
     set -euo pipefail
     exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
 
-    echo "[*] Installing Docker, Git, Python & dependencies..."
-    sudo dnf install -y docker git python3-pip aws-cli gcc python3-devel
+    echo "[*] Updating system & installing Docker, Compose, Git, AWS CLI, jq..."
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -y
+    apt-get install -y docker.io docker-compose-v2 git awscli jq python3-pip build-essential
     systemctl enable --now docker
-    usermod -aG docker ec2-user
+    usermod -aG docker ubuntu
 
-    DOCKER_CONFIG=$${DOCKER_CONFIG:-/usr/local/lib/docker}
-    mkdir -p $DOCKER_CONFIG/cli-plugins
-    curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 -o $DOCKER_CONFIG/cli-plugins/docker-compose
-    chmod +x $DOCKER_CONFIG/cli-plugins/docker-compose
-
-    pip3 install boto3 kafka-python lz4
+    echo "[*] Installing Python libraries for Producer..."
+    pip3 install boto3 kafka-python lz4 --break-system-packages || pip3 install boto3 kafka-python lz4
 
     echo "[*] Cloning dvdrental repository..."
-    APP_DIR="/home/ec2-user/dvdrental_streaming_data"
+    APP_DIR="/home/ubuntu/dvdrental_streaming_data"
     if [ ! -d "$APP_DIR" ]; then
       git clone https://github.com/Dungpham0703/dvdrental_streaming_data.git "$APP_DIR"
     else
@@ -360,7 +376,7 @@ resource "aws_instance" "producer" {
     fi
 
     echo "[*] Configuring Airflow environment..."
-    mkdir -p /home/ec2-user/.aws "$APP_DIR/pipelines/airflow/logs" "$APP_DIR/pipelines/airflow/plugins"
+    mkdir -p /home/ubuntu/.aws "$APP_DIR/pipelines/airflow/logs" "$APP_DIR/pipelines/airflow/plugins"
 
     echo "[*] Fetching Airflow secrets from Secrets Manager..."
     AIRFLOW_SECRET=$(aws secretsmanager get-secret-value \
@@ -382,15 +398,12 @@ AIRFLOW__AWS__S3_BUCKET_NAME=s3://${data.aws_s3_bucket.hudi_data.bucket}/bronze/
 SLACK_WEBHOOK_URL=$SLACK_URL
 ENVEOF
 
-    chown -R ec2-user:ec2-user "$APP_DIR" /home/ec2-user/.aws
+    chown -R ubuntu:ubuntu "$APP_DIR" /home/ubuntu/.aws
     chmod -R 777 "$APP_DIR/pipelines/airflow/logs" "$APP_DIR/pipelines/airflow/plugins"
 
-    echo "[*] Building Airflow image..."
-    export HOME=/home/ec2-user
-    cd "$APP_DIR/pipelines/airflow"
-    docker build -t ghcr.io/dungpham0703/dvdrental_streaming_data/airflow:latest .
-
     echo "[*] Starting Airflow services via Docker Compose..."
+    cd "$APP_DIR/pipelines/airflow"
+    docker compose build
     docker compose up -d
   EOF
 
