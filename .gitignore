@@ -1,39 +1,56 @@
 .env
 *.env
+**/.env
 
 .DS_Store
 .vscode/
 *__pycache__
+**/__pycache__
 
 dbt_packages
+**/dbt_packages/
 logs
+**/logs/
 target/
+**/target/
 .user.yml
 profiles.yml
+**/profiles.yml
 package-lock.yml
 
-*/.next
-*/node_modules
-*/ui-ux-pro-max-skill-main
+**/.next/
+**/node_modules/
+**/ui-ux-pro-max-skill-main/
 food_deliveries.py
-*/mviz
+**/mviz/
+**/aws/
+**/.venv/
+.venv/
+**/setup_metabase.py
+gen_faker.py
+patch_food_deliveries.py
+
+# AI Agent
+apps/ai_agent/chroma_db/
+apps/ai_agent/rag_context.txt
+apps/ai_agent/query_history.txt
 06_ai_agent/chroma_db/
 06_ai_agent/rag_context.txt
 06_ai_agent/query_history.txt
 
 05_superset_visual/dashboards_as_code/*
 05_superset_visual/dashboard_export_20260903T151214/*
-
 05_superset_visual/dashboard_export_20260903T151615/*
-*/aws/
-*/.venv/
-.venv/
-*/setup_metabase.py
-gen_faker.py
-patch_food_deliveries.py
 
+# Terraform
+infra/terraform_single_node/*
+infra/terraform_single_node/.terraform/
+infra/terraform_single_node/.terraform.lock.hcl
+infra/terraform_single_node/terraform.tfstate
+infra/terraform_single_node/terraform.tfstate.backup
+infra/terraform_single_node/terraform.tfvars
+infra/terraform_single_node/*.tfplan
 terraform/*
-
 terraform/.terraform/
 terraform/.terraform.lock.hcl
 terraform/terraform.tfstate
@@ -43,12 +60,12 @@ terraform/*.tfplan
 
 test_venv/
 
+# Scripts & Experiments
+scripts/setup/
 setup/
-
-pyspark_duckdb/*
-
+scripts/experiments/xyz/*
 xyz/*
-
+scripts/benchmark/pumping_scripts/*
 pumping_scripts/*
 
 **/.terraform/

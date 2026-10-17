@@ -40,8 +40,8 @@ jobs:
       - name: Build and Push Docker Image
         uses: docker/build-push-action@v5
         with:
-          context: ./08_airflow
-          file: ./08_airflow/Dockerfile
+          context: ./pipelines/airflow
+          file: ./pipelines/airflow/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -58,7 +58,7 @@ jobs:
       - name: Create Airflow DAGs Bundle
         run: |
           mkdir -p build
-          tar -czvf build/airflow-dags.tar.gz -C 08_airflow/dags .
+          tar -czvf build/airflow-dags.tar.gz -C pipelines/airflow/dags .
 
       - name: Upload DAGs Artifact
         uses: actions/upload-artifact@v4
