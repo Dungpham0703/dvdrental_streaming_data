@@ -1,4 +1,5 @@
 x-airflow-common: &airflow-common
+  image: ${AIRFLOW_IMAGE_NAME:-ghcr.io/dungpham0703/dvdrental_streaming_data/airflow:latest}
   build: .
   environment: &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: LocalExecutor

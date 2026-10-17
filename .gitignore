@@ -43,7 +43,6 @@ apps/ai_agent/query_history.txt
 05_superset_visual/dashboard_export_20260903T151615/*
 
 # Terraform
-infra/terraform_single_node/*
 infra/terraform_single_node/.terraform/
 infra/terraform_single_node/.terraform.lock.hcl
 infra/terraform_single_node/terraform.tfstate

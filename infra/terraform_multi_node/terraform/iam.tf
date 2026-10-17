@@ -143,3 +143,84 @@ resource "aws_iam_instance_profile" "producer_profile" {
   name = "Kafka_Producer_Profile_${random_id.bucket_suffix.hex}"
   role = aws_iam_role.producer_role.name
 }
+
+# 4. Airflow Orchestrator Node Profile
+resource "aws_iam_role" "airflow_role" {
+  name = "Airflow_EC2_Role_${random_id.bucket_suffix.hex}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "airflow_ssm" {
+  role       = aws_iam_role.airflow_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_role_policy_attachment" "airflow_s3_attach" {
+  role       = aws_iam_role.airflow_role.name
+  policy_arn = aws_iam_policy.spark_s3_custom.arn
+}
+
+resource "aws_iam_role_policy_attachment" "airflow_secrets_attach" {
+  role       = aws_iam_role.airflow_role.name
+  policy_arn = aws_iam_policy.producer_secrets.arn
+}
+
+resource "aws_iam_policy" "airflow_athena_glue" {
+  name        = "Airflow_Athena_Glue_Access_${random_id.bucket_suffix.hex}"
+  description = "Allows Airflow to run Athena queries and access Glue Catalog for Iceberg & dbt"
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = [
+          "athena:StartQueryExecution",
+          "athena:GetQueryExecution",
+          "athena:GetQueryResults",
+          "athena:StopQueryExecution",
+          "athena:GetWorkGroup"
+        ]
+        Effect   = "Allow"
+        Resource = "*"
+      },
+      {
+        Action = [
+          "glue:GetDatabase",
+          "glue:GetDatabases",
+          "glue:GetTable",
+          "glue:GetTables",
+          "glue:GetPartition",
+          "glue:GetPartitions",
+          "glue:CreateTable",
+          "glue:UpdateTable",
+          "glue:DeleteTable",
+          "glue:BatchCreatePartition",
+          "glue:BatchDeletePartition"
+        ]
+        Effect   = "Allow"
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "airflow_athena_glue_attach" {
+  role       = aws_iam_role.airflow_role.name
+  policy_arn = aws_iam_policy.airflow_athena_glue.arn
+}
+
+resource "aws_iam_instance_profile" "airflow_profile" {
+  name = "Airflow_EC2_Profile_${random_id.bucket_suffix.hex}"
+  role = aws_iam_role.airflow_role.name
+}
