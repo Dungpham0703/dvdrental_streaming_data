@@ -1,9 +1,9 @@
 # Real-Time E-Commerce Analytics Lakehouse
 
-> **Architected & Implemented by:** Dung Pham  
+> **Architected & Implemented by:** Dung Pham
 > **Repository:** [dvdrental_streaming_data](https://github.com/Dungpham0703/dvdrental_streaming_data)
 
-![Data Platform Architecture](src/images/data_platform_architect.png)
+![Data Platform Architecture](docs/images/data_platform_architect.png)
 
 ## 1. Business Requirement
 
@@ -48,15 +48,15 @@ To solve the analytical bottlenecks, the data was remodeled into a **Star Schema
 
 - **Debezium & Kafka:** Enables zero-impact Change Data Capture (CDC). It streams database changes asynchronously directly from transaction logs (WAL), avoiding heavy polling queries on the source DB.
 - **Apache Hudi (Raw Layer):** Chosen for the Bronze (Raw) layer. Hudi's Merge-On-Read (MOR) format is highly optimized for continuous, low-latency streaming updates and upserts directly from Kafka.
-  ![Raw Data with Hudi Format](src/images/raw_data_with_hudi_format.png)
+  ![Raw Data with Hudi Format](docs/images/raw_data_with_hudi_format.png)
 - **Apache Iceberg (Staging/Mart Layers):** Chosen for Silver (Staging) and Gold (Mart) layers. Iceberg excels at large-scale OLAP analytical queries, schema evolution, and time-travel querying. It integrates seamlessly with dbt and AWS Athena for high-performance reading.
-  ![Staging Data with Iceberg Format](src/images/staging_data_with_iceberg_format.png)
-  ![Mart Data with Iceberg Format](src/images/mart_data_with_iceberg_format.png)
+  ![Staging Data with Iceberg Format](docs/images/staging_data_with_iceberg_format.png)
+  ![Mart Data with Iceberg Format](docs/images/mart_data_with_iceberg_format.png)
 - **dbt (Data Build Tool):** Manages the transformation logic (SQL) from Raw to Staging to Mart. It handles complex SCD Type 2 logic, incremental CDC processing, and automated data quality testing.
-  ![dbt Lineage Graph](src/images/dbt_linage_graph_model.png)
+  ![dbt Lineage Graph](docs/images/dbt_linage_graph_model.png)
 - **Apache Airflow (Orchestration):** Orchestrates and automates the dbt transformation workflow end-to-end. Runs on a 15-minute cron schedule (`*/15 * * * *`), automatically executing `dbt deps` -> `dbt run` -> `dbt test` to ensure fresh, validated data in the Gold layer.
 - **AWS Athena & Glue:** Provides serverless data cataloging and querying. Glue organizes the tables, making the S3 data instantly queryable via standard SQL in Athena.
-  ![Databases on AWS Glue](src/images/databases_on_aws_glue.png)
+  ![Databases on AWS Glue](docs/images/databases_on_aws_glue.png)
 
 ## 4. Implementation Steps
 
@@ -78,51 +78,61 @@ To solve the analytical bottlenecks, the data was remodeled into a **Star Schema
 
 ```text
 dvdrental_streaming_data/
-├── 01_kafka_broker/          # Zookeeper & Kafka cluster setup
-├── 02_debezium_connector/    # CDC config (Postgres -> Kafka)
-├── 03_hudi_streamer/         # Ingestion scripts (Kafka -> Hudi on S3)
-├── 04_dbt_transform/         # dbt models (Silver & Gold Layers)
-├── 05_metabase_visual/       # BI Dashboards as code (Metabase)
-├── 06_ai_agent/              # GenAI Python agent for Text-to-SQL logic
-├── 07_ai_dashboard/          # Frontend Web App (React/Vite/Next.js) for AI Dashboard
-├── 08_airflow/               # Apache Airflow orchestration (dbt DAG schedule)
-└── src/images/               # Architecture diagrams and assets
+├── apps/                         # User-facing applications & microservices
+│   ├── ai_agent/                 # GenAI backend service (FastAPI + Google Gemini)
+│   └── ai_dashboard/             # Frontend analytics web app (Next.js + Tailwind CSS)
+├── pipelines/                    # Data processing & lakehouse transformations
+│   ├── dbt/                      # dbt transformation models (Silver/Staging & Gold/Mart)
+│   ├── hudi/                     # Hudi Streamer ingestion configs (Kafka -> Hudi MOR)
+│   └── airflow/                  # Orchestration DAGs, schedules & alerting plugins
+├── infra/                        # Infrastructure as Code (IaC) & container environments
+│   ├── docker/                   # Containerized local runtimes (Kafka, Debezium, Metabase)
+│   │   ├── kafka/                # Zookeeper & Apache Kafka broker
+│   │   ├── debezium/             # Debezium PostgreSQL CDC connector
+│   │   └── metabase/             # Metabase BI container & dashboard exports
+│   └── terraform_multi_node/     # AWS EC2 multi-node cluster provisioning
+├── scripts/                      # Operational utilities & automation
+│   ├── benchmark/                # Stress-testing & synthetic load generators
+│   ├── setup/                    # WSL2 & local development bootstrap scripts
+│   └── experiments/              # PySpark, DuckDB exploration & scratch scripts
+└── docs/
+    └── images/                   # Architecture diagrams & documentation assets
 ```
 
 ## 7. Data Serving & AI Dashboard
 
 **Data Serving Architecture:**
-The final Data Marts (Gold layer in Iceberg format) are queried directly from S3 via **AWS Athena** - a serverless interactive query engine. BI tools like Metabase (`05_metabase_visual`) connect to Athena to render pre-defined analytics dashboards.
+The final Data Marts (Gold layer in Iceberg format) are queried directly from S3 via **AWS Athena** - a serverless interactive query engine. BI tools like Metabase (`infra/docker/metabase`) connect to Athena to render pre-defined analytics dashboards.
 
 **AI Dashboard & Text-to-SQL Flow:**
 To empower non-technical users, we built an innovative **AI Dashboard** that allows users to "chat with their data" in natural language:
 
-1. **User Request:** A business user types a question (e.g., _"Show me the top 5 movie categories by revenue this month"_) into the Frontend Web App (`07_ai_dashboard`).
-2. **AI Agent (`06_ai_agent`):** A backend Python service utilizing **Google Gemini Pro** processes the prompt. It understands the underlying Iceberg schema and generates an optimized, syntax-correct Athena SQL query.
+1. **User Request:** A business user types a question (e.g., _"Show me the top 5 movie categories by revenue this month"_) into the Frontend Web App (`apps/ai_dashboard`).
+2. **AI Agent (`apps/ai_agent`):** A backend Python service utilizing **Google Gemini Pro** processes the prompt. It understands the underlying Iceberg schema and generates an optimized, syntax-correct Athena SQL query.
 3. **Execution & Rendering:** The Agent executes the generated SQL against AWS Athena, retrieves the results, and returns them to the frontend, which dynamically renders a custom chart or data table.
 
 ## 8. Business Intelligence Dashboards (Metabase)
 
-A fully automated Metabase setup is provided via Python script (`05_metabase_visual/setup_metabase.py`), which instantly provisions the following 4 interactive dashboards directly on top of the Iceberg Data Marts via AWS Athena.
+A fully automated Metabase setup is provided via Python script (`infra/docker/metabase/setup_metabase.py`), which instantly provisions the following 4 interactive dashboards directly on top of the Iceberg Data Marts via AWS Athena.
 
 ### 1. Revenue & Payment Analytics
 
-![Revenue Analytics 1](<05_metabase_visual/dashboards/Metabase -  1. Revenue & Payment Analytics-images-0.jpg>)
-![Revenue Analytics 2](<05_metabase_visual/dashboards/Metabase -  1. Revenue & Payment Analytics-images-1.jpg>)
+![Revenue Analytics 1](<infra/docker/metabase/dashboards/Metabase -  1. Revenue & Payment Analytics-images-0.jpg>)
+![Revenue Analytics 2](<infra/docker/metabase/dashboards/Metabase -  1. Revenue & Payment Analytics-images-1.jpg>)
 
 ### 2. Rental Operations
 
-![Rental Operations 1](<05_metabase_visual/dashboards/Metabase -  2. Rental Operations_page-0001.jpg>)
-![Rental Operations 2](<05_metabase_visual/dashboards/Metabase -  2. Rental Operations_page-0002.jpg>)
+![Rental Operations 1](<infra/docker/metabase/dashboards/Metabase -  2. Rental Operations_page-0001.jpg>)
+![Rental Operations 2](<infra/docker/metabase/dashboards/Metabase -  2. Rental Operations_page-0002.jpg>)
 
 ### 3. Customer Intelligence
 
-![Customer Intelligence](<05_metabase_visual/dashboards/Metabase -  3. Customer Intelligence_page-0001.jpg>)
+![Customer Intelligence](<infra/docker/metabase/dashboards/Metabase -  3. Customer Intelligence_page-0001.jpg>)
 
 ### 4. Film Catalog & Inventory
 
-![Film Catalog 1](<05_metabase_visual/dashboards/Metabase - 4. Film Catalog & Inventory_page-0001.jpg>)
-![Film Catalog 2](<05_metabase_visual/dashboards/Metabase - 4. Film Catalog & Inventory_page-0002.jpg>)
+![Film Catalog 1](<infra/docker/metabase/dashboards/Metabase - 4. Film Catalog & Inventory_page-0001.jpg>)
+![Film Catalog 2](<infra/docker/metabase/dashboards/Metabase - 4. Film Catalog & Inventory_page-0002.jpg>)
 
 ## 9. CI/CD Pipeline Automation (GitHub Actions)
 
@@ -131,9 +141,8 @@ The repository uses **GitHub Actions** for automated testing, dbt validation, an
 - **Continuous Integration (`.github/workflows/ci.yml`)**:
   - **Code Quality**: Runs `ruff` Python linting/formatting checks, `pre-commit` hooks, and `shellcheck` for shell scripts.
   - **dbt Transformation CI**: Runs `dbt deps`, `dbt parse`, and `dbt compile` against mock profile configs to guarantee all SQL models, macros, and schema YAMLs compile without syntax errors.
-  - **Airflow Pipeline CI**: Validates Python DAG compilation (`08_airflow/dags/dbt_transform.py`) and Docker Compose configuration.
+  - **Airflow Pipeline CI**: Validates Python DAG compilation (`pipelines/airflow/dags/dbt_transform.py`) and Docker Compose configuration.
 
 - **Continuous Deployment (`.github/workflows/cd.yml`)**:
-  - **Airflow Container Build**: Builds and pushes production Docker images for Airflow (`08_airflow`) to **GitHub Container Registry (GHCR)** on pushes to `main`/`master` or version tags (`v*`).
+  - **Airflow Container Build**: Builds and pushes production Docker images for Airflow (`pipelines/airflow`) to **GitHub Container Registry (GHCR)** on pushes to `main`/`master` or version tags (`v*`).
   - **DAG Artifact Packaging**: Bundles Airflow DAGs into release artifacts for automated deployment to production orchestration environments.
-

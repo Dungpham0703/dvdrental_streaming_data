@@ -1,6 +1,0 @@
-pyspark==3.5.1
-duckdb==1.0.0
-jupyterlab==4.2.1
-boto3==1.34.110
-pandas==2.2.2
-pyiceberg==0.12.0

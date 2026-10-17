@@ -27,22 +27,22 @@ jobs:
           pip install ruff pre-commit
 
       - name: Run Ruff Linter Check
-        run: ruff check --exclude 06_ai_agent --exclude 07_ai_dashboard .
+        run: ruff check --exclude apps/ai_agent --exclude apps/ai_dashboard --exclude scripts/experiments --exclude /home/dzung/projects/dvdrental_streaming_data/infra/terraform_multi_node/producer/producer.py .
 
       - name: Run Ruff Formatter Check
-        run: ruff format --check --exclude 06_ai_agent --exclude 07_ai_dashboard .
+        run: ruff format --check --exclude apps/ai_agent --exclude apps/ai_dashboard --exclude scripts/experiments --exclude /home/dzung/projects/dvdrental_streaming_data/infra/terraform_multi_node/producer/producer.py .
 
       - name: Run ShellCheck on Shell Scripts
         run: |
           sudo apt-get update && sudo apt-get install -y shellcheck
-          shellcheck run_stress_test.sh
+          shellcheck scripts/benchmark/run_stress_test.sh
 
   dbt-ci:
     name: dbt Models & Syntax Validation
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: 04_dbt_transform
+        working-directory: pipelines/dbt
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -112,8 +112,8 @@ jobs:
 
       - name: Validate Airflow DAG Syntax
         run: |
-          python -m py_compile 08_airflow/dags/dbt_transform.py
+          python -m py_compile pipelines/airflow/dags/dbt_transform.py
 
       - name: Validate Airflow Docker Compose Configuration
         run: |
-          docker compose -f 08_airflow/docker-compose.yml config --quiet
+          docker compose -f pipelines/airflow/docker-compose.yml config --quiet
