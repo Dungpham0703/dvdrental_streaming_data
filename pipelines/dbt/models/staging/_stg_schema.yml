@@ -183,6 +183,9 @@ models:
               field: rental_id
       - name: amount
         tests: [not_null]
+      - name: is_deleted
+        description: "Soft delete flag indicating whether the source record was deleted (true/false)"
+        tests: [not_null]
 
   - name: stg_rental
     description: "Cleaned and deduplicated rental transactions from CDC stream"
@@ -209,6 +212,9 @@ models:
               to: ref('stg_staff')
               field: staff_id
       - name: rental_date
+        tests: [not_null]
+      - name: is_deleted
+        description: "Soft delete flag indicating whether the source record was deleted (true/false)"
         tests: [not_null]
 
   - name: stg_staff

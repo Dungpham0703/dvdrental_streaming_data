@@ -1,9 +1,11 @@
 with rentals as (
     select * from {{ ref('stg_rental') }}
+    where is_deleted = false
 ),
 
 payments as (
     select * from {{ ref('stg_payment') }}
+    where is_deleted = false
 ),
 
 customer_rental_summary as (

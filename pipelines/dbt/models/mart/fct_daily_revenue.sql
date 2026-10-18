@@ -9,8 +9,8 @@
 
 with dates as (
     select * from {{ ref('dim_date') }}
-    where date_day >= (select min(payment_date_day) from {{ ref('fct_payment') }})
-      and date_day <= (select max(payment_date_day) from {{ ref('fct_payment') }})
+    where date_day >= (select min(payment_date_day) from {{ ref('fct_payment_active') }})
+      and date_day <= (select max(payment_date_day) from {{ ref('fct_payment_active') }})
 ),
 
 stores as (
@@ -26,7 +26,7 @@ date_store_grid as (
 ),
 
 payments as (
-    select * from {{ ref('fct_payment') }}
+    select * from {{ ref('fct_payment_active') }}
 ),
 
 final as (

@@ -44,7 +44,7 @@ models:
         tests: [unique, not_null]
 
   - name: fct_rental
-    description: "Rental fact table enriched with film_id, store_id, and computed rental duration"
+    description: "Rental fact table enriched with film_id, store_id, and computed rental duration. Retains deleted transactions with is_deleted=true."
     columns:
       - name: rental_id
         description: "Primary key"
@@ -63,9 +63,18 @@ models:
               field: staff_id
       - name: rental_date
         tests: [not_null]
+      - name: is_deleted
+        description: "Soft delete flag indicating whether the source record was deleted"
+        tests: [not_null]
+
+  - name: fct_rental_active
+    description: "Active rental transactions view filtering out soft-deleted records"
+    columns:
+      - name: rental_id
+        tests: [unique, not_null]
 
   - name: fct_payment
-    description: "Payment fact table enriched with film_id and store_id"
+    description: "Payment fact table enriched with film_id and store_id. Retains deleted transactions with is_deleted=true."
     columns:
       - name: payment_id
         description: "Primary key"
@@ -82,6 +91,15 @@ models:
           - not_null
           - dbt_utils.expression_is_true:
               expression: "> 0"
+      - name: is_deleted
+        description: "Soft delete flag indicating whether the source record was deleted"
+        tests: [not_null]
+
+  - name: fct_payment_active
+    description: "Active payment transactions view filtering out soft-deleted records"
+    columns:
+      - name: payment_id
+        tests: [unique, not_null]
 
   - name: dim_date
     description: "Generated Date Dimension table providing rich calendar context (year, quarter, month, day of week, is_weekend)"
