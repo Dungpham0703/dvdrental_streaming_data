@@ -9,6 +9,7 @@
             'rental_date': 'case when src.is_deleted then _old_ else _new_ end',
             'rental_date_day': 'case when src.is_deleted then _old_ else _new_ end',
             'return_date': 'case when src.is_deleted then _old_ else _new_ end',
+            'customer_key': 'case when src.is_deleted then _old_ else _new_ end',
             'customer_id': 'case when src.is_deleted then _old_ else _new_ end',
             'film_id': 'case when src.is_deleted then _old_ else _new_ end',
             'store_id': 'case when src.is_deleted then _old_ else _new_ end',
@@ -39,12 +40,26 @@ inventory as (
     select * from {{ ref('stg_inventory') }}
 ),
 
+customers as (
+    select
+        customer_key,
+        customer_id,
+        case
+            when lag(valid_to) over (partition by customer_id order by valid_from) is null
+            then timestamp '1970-01-01 00:00:00'
+            else cast(valid_from as timestamp)
+        end as effective_from,
+        coalesce(cast(valid_to as timestamp), timestamp '9999-12-31 23:59:59') as effective_to
+    from {{ ref('dim_customer') }}
+),
+
 final as (
     select
         r.rental_id,
         r.rental_date,
         cast(substr(r.rental_date, 1, 10) as date) as rental_date_day,
         r.return_date,
+        coalesce(c.customer_key, '-1') as customer_key,
         r.customer_id,
         i.film_id,
         i.store_id,
@@ -59,6 +74,13 @@ final as (
     from rentals r
     left join inventory i
         on r.inventory_id = i.inventory_id
+    left join customers c
+        on r.customer_id = c.customer_id
+       and (
+           r.rental_date is not null
+           and date_parse(r.rental_date, '%Y-%m-%d %H:%i:%s.%f') >= c.effective_from
+           and date_parse(r.rental_date, '%Y-%m-%d %H:%i:%s.%f') < c.effective_to
+       )
 )
 
 select * from final

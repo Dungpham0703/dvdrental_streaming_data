@@ -69,6 +69,11 @@ class TestCdcSoftDeleteModelStructure(unittest.TestCase):
         self.assertIn("update_condition=", content)
         self.assertIn("merge_update_columns_rules=", content)
         self.assertIn("r.is_deleted", content)
+        self.assertIn(
+            "'customer_key': 'case when src.is_deleted then _old_ else _new_ end'",
+            content,
+        )
+        self.assertIn("coalesce(c.customer_key, '-1') as customer_key", content)
         # Must not physically delete rows
         self.assertNotIn("delete_condition", content)
 
@@ -78,6 +83,11 @@ class TestCdcSoftDeleteModelStructure(unittest.TestCase):
         self.assertIn("update_condition=", content)
         self.assertIn("merge_update_columns_rules=", content)
         self.assertIn("p.is_deleted", content)
+        self.assertIn(
+            "'customer_key': 'case when src.is_deleted then _old_ else _new_ end'",
+            content,
+        )
+        self.assertIn("coalesce(c.customer_key, '-1') as customer_key", content)
         # Must not physically delete rows
         self.assertNotIn("delete_condition", content)
 

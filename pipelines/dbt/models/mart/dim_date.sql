@@ -14,7 +14,7 @@ with date_sequence as (
 final as (
     select
         cast(date_format(date_column, '%Y%m%d') as integer) as date_key,
-        date_column as date_day,
+        cast(date_column as date) as date_day,
         year(date_column) as year,
         quarter(date_column) as quarter,
         month(date_column) as month,

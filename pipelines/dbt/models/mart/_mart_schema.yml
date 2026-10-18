@@ -49,6 +49,9 @@ models:
       - name: rental_id
         description: "Primary key"
         tests: [unique, not_null]
+      - name: customer_key
+        description: "Point-in-Time surrogate key referencing dim_customer.customer_key"
+        tests: [not_null]
       - name: customer_id
         tests:
           - not_null
@@ -72,6 +75,8 @@ models:
     columns:
       - name: rental_id
         tests: [unique, not_null]
+      - name: customer_key
+        tests: [not_null]
 
   - name: fct_payment
     description: "Payment fact table enriched with film_id and store_id. Retains deleted transactions with is_deleted=true."
@@ -79,6 +84,9 @@ models:
       - name: payment_id
         description: "Primary key"
         tests: [unique, not_null]
+      - name: customer_key
+        description: "Point-in-Time surrogate key referencing dim_customer.customer_key"
+        tests: [not_null]
       - name: customer_id
         tests:
           - not_null
@@ -100,6 +108,8 @@ models:
     columns:
       - name: payment_id
         tests: [unique, not_null]
+      - name: customer_key
+        tests: [not_null]
 
   - name: dim_date
     description: "Generated Date Dimension table providing rich calendar context (year, quarter, month, day of week, is_weekend)"
