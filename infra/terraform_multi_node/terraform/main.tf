@@ -134,46 +134,6 @@ resource "aws_security_group" "rds" {
   }
 }
 
-resource "aws_security_group" "debezium" {
-  name        = "debezium_sg_${random_id.bucket_suffix.hex}"
-  description = "Security group for Debezium EC2"
-  vpc_id      = aws_vpc.main.id
-
-  ingress {
-    description = "SSH"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    description = "Debezium Kafka Connect API"
-    from_port   = 8083
-    to_port     = 8083
-    protocol    = "tcp"
-    cidr_blocks = [aws_vpc.main.cidr_block, "0.0.0.0/0"]
-  }
-
-  ingress {
-    description = "Internal VPC traffic"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = [aws_vpc.main.cidr_block]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "Debezium-SG"
-  }
-}
 
 data "aws_ami" "ubuntu" {
   most_recent = true
@@ -314,7 +274,7 @@ resource "aws_instance" "spark_master" {
 }
 
 resource "aws_instance" "spark_worker" {
-  count                  = 2
+  count                  = 3
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.instance_type_cluster
   subnet_id              = aws_subnet.main.id
@@ -368,7 +328,7 @@ resource "aws_instance" "spark_worker" {
 # -----------------------------------------------------------------------------
 resource "aws_security_group" "producer_airflow" {
   name        = "producer_airflow_sg_${random_id.bucket_suffix.hex}"
-  description = "Security group for combined Producer + Airflow EC2"
+  description = "Security group for combined Control Node (Producer + Airflow + Debezium)"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -377,6 +337,14 @@ resource "aws_security_group" "producer_airflow" {
     to_port     = 8080
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "Debezium Kafka Connect API"
+    from_port   = 8083
+    to_port     = 8083
+    protocol    = "tcp"
+    cidr_blocks = [aws_vpc.main.cidr_block, "0.0.0.0/0"]
   }
 
   ingress {
@@ -392,7 +360,7 @@ resource "aws_security_group" "producer_airflow" {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
-    cidr_blocks = ["172.31.16.0/24"]
+    cidr_blocks = [aws_vpc.main.cidr_block]
   }
 
   egress {
@@ -403,7 +371,7 @@ resource "aws_security_group" "producer_airflow" {
   }
 
   tags = {
-    Name = "Producer-Airflow-SG"
+    Name = "Producer-Airflow-Debezium-SG"
   }
 }
 
@@ -432,16 +400,113 @@ resource "aws_instance" "producer" {
     set -euo pipefail
     exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
 
-    echo "[*] Updating system & installing Docker, Compose, Git, AWS CLI, jq..."
+    echo "[*] Updating system & installing Docker, Compose, Git, AWS CLI, jq, postgresql-client, curl..."
     export DEBIAN_FRONTEND=noninteractive
     apt-get update -y
-    apt-get install -y docker.io docker-compose-v2 git awscli jq python3-pip build-essential
+    apt-get install -y docker.io docker-compose-v2 git awscli jq curl python3-pip build-essential postgresql-client
     systemctl enable --now docker
     usermod -aG docker ubuntu
 
     echo "[*] Installing Python libraries for Producer..."
     pip3 install boto3 kafka-python lz4 --break-system-packages || pip3 install boto3 kafka-python lz4
 
+    # 1. Enforce REPLICA IDENTITY FULL on PostgreSQL RDS
+    cat > /home/ubuntu/enforce_replica_identity.sh <<'SCRIPT_EOF'
+#!/bin/bash
+set -euo pipefail
+echo "[*] Waiting for PostgreSQL RDS (${aws_db_instance.postgres.address}:5432) to accept connections..."
+export PGPASSWORD="${var.db_password}"
+MAX_RETRIES=45
+COUNT=0
+until psql -h "${aws_db_instance.postgres.address}" -p 5432 -U "${var.db_username}" -d "${var.db_name}" -c '\q' >/dev/null 2>&1 || [ $COUNT -eq $MAX_RETRIES ]; do
+  echo "Waiting for RDS PostgreSQL to be ready ($COUNT/$MAX_RETRIES)..."
+  sleep 10
+  COUNT=$((COUNT+1))
+done
+
+echo "[*] Enforcing REPLICA IDENTITY FULL on transactional tables for Debezium CDC..."
+psql -h "${aws_db_instance.postgres.address}" -p 5432 -U "${var.db_username}" -d "${var.db_name}" <<'SQLEOF'
+DO $$
+DECLARE
+  t text;
+  tbls text[] := ARRAY[
+    'actor', 'address', 'category', 'city', 'country',
+    'customer', 'film', 'film_actor', 'film_category',
+    'inventory', 'language', 'payment', 'rental', 'staff', 'store'
+  ];
+BEGIN
+  FOREACH t IN ARRAY tbls LOOP
+    IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = t) THEN
+      EXECUTE 'ALTER TABLE public.' || quote_ident(t) || ' REPLICA IDENTITY FULL;';
+      RAISE NOTICE 'Configured REPLICA IDENTITY FULL on public.%', t;
+    END IF;
+  END LOOP;
+END $$;
+SQLEOF
+echo "[*] REPLICA IDENTITY FULL configured successfully."
+SCRIPT_EOF
+
+    chmod +x /home/ubuntu/enforce_replica_identity.sh
+    chown ubuntu:ubuntu /home/ubuntu/enforce_replica_identity.sh
+    /home/ubuntu/enforce_replica_identity.sh || true
+
+    # 2. Start Debezium Kafka Connect container
+    echo "[*] Starting Debezium Kafka Connect container..."
+    KAFKA_BROKERS="${join(",", [for inst in aws_instance.kafka : "${inst.private_ip}:9092"])}"
+    docker run -d \
+      --name debezium-connect \
+      --network host \
+      --restart always \
+      -e GROUP_ID=debezium-cluster \
+      -e CONFIG_STORAGE_TOPIC=debezium_configs \
+      -e OFFSET_STORAGE_TOPIC=debezium_offsets \
+      -e STATUS_STORAGE_TOPIC=debezium_statuses \
+      -e CONFIG_STORAGE_REPLICATION_FACTOR=1 \
+      -e OFFSET_STORAGE_REPLICATION_FACTOR=1 \
+      -e STATUS_STORAGE_REPLICATION_FACTOR=1 \
+      -e BOOTSTRAP_SERVERS="$KAFKA_BROKERS" \
+      -e KEY_CONVERTER=org.apache.kafka.connect.json.JsonConverter \
+      -e VALUE_CONVERTER=org.apache.kafka.connect.json.JsonConverter \
+      -e KEY_CONVERTER_SCHEMAS_ENABLE=false \
+      -e VALUE_CONVERTER_SCHEMAS_ENABLE=false \
+      -e REST_PORT=8083 \
+      debezium/connect:2.5
+
+    # 3. Register Debezium PostgreSQL Connector
+    echo "[*] Waiting for Debezium Kafka Connect REST API on port 8083..."
+    until curl -s http://127.0.0.1:8083/connectors >/dev/null 2>&1; do
+      sleep 5
+    done
+
+    echo "[*] Preparing Debezium connector registration payload..."
+    cat > /home/ubuntu/register-debezium.json <<'CONEOF'
+{
+  "name": "dvdrental-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "tasks.max": "1",
+    "plugin.name": "pgoutput",
+    "database.hostname": "${aws_db_instance.postgres.address}",
+    "database.port": "5432",
+    "database.user": "${var.db_username}",
+    "database.password": "${var.db_password}",
+    "database.dbname": "${var.db_name}",
+    "database.server.name": "dvdrental",
+    "topic.prefix": "cdc.public",
+    "schema.include.list": "public",
+    "table.include.list": "public.actor,public.address,public.category,public.city,public.country,public.customer,public.film,public.film_actor,public.film_category,public.inventory,public.language,public.payment,public.rental,public.staff,public.store",
+    "tombstones.on.delete": "false",
+    "decimal.handling.mode": "double"
+  }
+}
+CONEOF
+    chown ubuntu:ubuntu /home/ubuntu/register-debezium.json
+
+    curl -i -X POST -H "Accept:application/json" -H "Content-Type:application/json" \
+      http://127.0.0.1:8083/connectors/ \
+      -d @/home/ubuntu/register-debezium.json || true
+
+    # 4. Clone repo and start Airflow
     echo "[*] Cloning dvdrental repository..."
     APP_DIR="/home/ubuntu/dvdrental_streaming_data"
     if [ ! -d "$APP_DIR" ]; then
@@ -483,7 +548,7 @@ ENVEOF
   EOF
 
   tags = {
-    Name = "Producer-Airflow-Node"
+    Name = "Control-Node-Producer-Airflow-Debezium"
   }
 }
 
@@ -545,134 +610,6 @@ resource "aws_db_instance" "postgres" {
   }
 }
 
-# -----------------------------------------------------------------------------
-# Debezium CDC EC2 Node (Lightweight instance for Kafka Connect)
-# -----------------------------------------------------------------------------
-resource "aws_instance" "debezium" {
-  ami                    = data.aws_ami.ubuntu.id
-  instance_type          = var.instance_type_debezium
-  subnet_id              = aws_subnet.main.id
-  private_ip             = cidrhost(aws_subnet.main.cidr_block, 105)
-  vpc_security_group_ids = [aws_security_group.debezium.id]
-  iam_instance_profile   = aws_iam_instance_profile.debezium_profile.name
-
-  root_block_device {
-    volume_size           = 25
-    volume_type           = "gp3"
-    delete_on_termination = true
-  }
-
-  user_data = <<-EOF
-    #!/bin/bash
-    set -euo pipefail
-    exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
-
-    echo "[*] Installing Docker, postgresql-client, jq, curl, awscli..."
-    export DEBIAN_FRONTEND=noninteractive
-    apt-get update -y
-    apt-get install -y docker.io docker-compose-v2 postgresql-client jq curl awscli
-    systemctl enable --now docker
-    usermod -aG docker ubuntu
-
-    # Create helper script for REPLICA IDENTITY FULL enforcement
-    cat > /home/ubuntu/enforce_replica_identity.sh <<'SCRIPT_EOF'
-#!/bin/bash
-set -euo pipefail
-echo "[*] Waiting for PostgreSQL RDS (${aws_db_instance.postgres.address}:5432) to accept connections..."
-export PGPASSWORD="${var.db_password}"
-MAX_RETRIES=45
-COUNT=0
-until psql -h "${aws_db_instance.postgres.address}" -p 5432 -U "${var.db_username}" -d "${var.db_name}" -c '\q' >/dev/null 2>&1 || [ $COUNT -eq $MAX_RETRIES ]; do
-  echo "Waiting for RDS PostgreSQL to be ready ($COUNT/$MAX_RETRIES)..."
-  sleep 10
-  COUNT=$((COUNT+1))
-done
-
-echo "[*] Enforcing REPLICA IDENTITY FULL on transactional tables for Debezium CDC..."
-psql -h "${aws_db_instance.postgres.address}" -p 5432 -U "${var.db_username}" -d "${var.db_name}" <<'SQLEOF'
-DO $$
-DECLARE
-  t text;
-  tbls text[] := ARRAY[
-    'actor', 'address', 'category', 'city', 'country',
-    'customer', 'film', 'film_actor', 'film_category',
-    'inventory', 'language', 'payment', 'rental', 'staff', 'store'
-  ];
-BEGIN
-  FOREACH t IN ARRAY tbls LOOP
-    IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = t) THEN
-      EXECUTE 'ALTER TABLE public.' || quote_ident(t) || ' REPLICA IDENTITY FULL;';
-      RAISE NOTICE 'Configured REPLICA IDENTITY FULL on public.%', t;
-    END IF;
-  END LOOP;
-END $$;
-SQLEOF
-echo "[*] REPLICA IDENTITY FULL configured successfully."
-SCRIPT_EOF
-
-    chmod +x /home/ubuntu/enforce_replica_identity.sh
-    chown ubuntu:ubuntu /home/ubuntu/enforce_replica_identity.sh
-    /home/ubuntu/enforce_replica_identity.sh || true
-
-    echo "[*] Starting Debezium Kafka Connect container..."
-    KAFKA_BROKERS="${join(",", [for inst in aws_instance.kafka : "${inst.private_ip}:9092"])}"
-    docker run -d \
-      --name debezium-connect \
-      --network host \
-      --restart always \
-      -e GROUP_ID=debezium-cluster \
-      -e CONFIG_STORAGE_TOPIC=debezium_configs \
-      -e OFFSET_STORAGE_TOPIC=debezium_offsets \
-      -e STATUS_STORAGE_TOPIC=debezium_statuses \
-      -e CONFIG_STORAGE_REPLICATION_FACTOR=1 \
-      -e OFFSET_STORAGE_REPLICATION_FACTOR=1 \
-      -e STATUS_STORAGE_REPLICATION_FACTOR=1 \
-      -e BOOTSTRAP_SERVERS="$KAFKA_BROKERS" \
-      -e KEY_CONVERTER=org.apache.kafka.connect.json.JsonConverter \
-      -e VALUE_CONVERTER=org.apache.kafka.connect.json.JsonConverter \
-      -e KEY_CONVERTER_SCHEMAS_ENABLE=false \
-      -e VALUE_CONVERTER_SCHEMAS_ENABLE=false \
-      -e REST_PORT=8083 \
-      debezium/connect:2.5
-
-    echo "[*] Waiting for Debezium Kafka Connect REST API on port 8083..."
-    until curl -s http://127.0.0.1:8083/connectors >/dev/null 2>&1; do
-      sleep 5
-    done
-
-    echo "[*] Preparing Debezium connector registration payload..."
-    cat > /home/ubuntu/register-debezium.json <<'CONEOF'
-{
-  "name": "dvdrental-connector",
-  "config": {
-    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
-    "tasks.max": "1",
-    "plugin.name": "pgoutput",
-    "database.hostname": "${aws_db_instance.postgres.address}",
-    "database.port": "5432",
-    "database.user": "${var.db_username}",
-    "database.password": "${var.db_password}",
-    "database.dbname": "${var.db_name}",
-    "database.server.name": "dvdrental",
-    "topic.prefix": "cdc.public",
-    "schema.include.list": "public",
-    "table.include.list": "public.actor,public.address,public.category,public.city,public.country,public.customer,public.film,public.film_actor,public.film_category,public.inventory,public.language,public.payment,public.rental,public.staff,public.store",
-    "tombstones.on.delete": "false",
-    "decimal.handling.mode": "double"
-  }
-}
-CONEOF
-    chown ubuntu:ubuntu /home/ubuntu/register-debezium.json
-
-    curl -i -X POST -H "Accept:application/json" -H "Content-Type:application/json" \
-      http://127.0.0.1:8083/connectors/ \
-      -d @/home/ubuntu/register-debezium.json || true
-  EOF
-
-  tags = {
-    Name = "Debezium-Node"
-  }
-}
 
 # -----------------------------------------------------------------------------
 # Outputs
@@ -722,13 +659,13 @@ output "postgres_port" {
 }
 
 output "debezium_private_ip" {
-  value = aws_instance.debezium.private_ip
+  value = aws_instance.producer.private_ip
 }
 
 output "debezium_public_ip" {
-  value = aws_instance.debezium.public_ip
+  value = aws_instance.producer.public_ip
 }
 
 output "debezium_connect_api" {
-  value = "http://${aws_instance.debezium.public_ip}:8083"
+  value = "http://${aws_instance.producer.public_ip}:8083"
 }

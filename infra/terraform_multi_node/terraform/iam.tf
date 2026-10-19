@@ -57,7 +57,7 @@ resource "aws_iam_role_policy_attachment" "spark_ssm" {
 
 resource "aws_iam_policy" "spark_s3_custom" {
   name        = "Spark_S3_Access_${random_id.bucket_suffix.hex}"
-  description = "Allows full S3 CRUD on dvd-rental-lakehouse"
+  description = "Allows full S3 CRUD on dvdrental-hudi-lake-dzung-2026"
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -70,8 +70,8 @@ resource "aws_iam_policy" "spark_s3_custom" {
         ]
         Effect = "Allow"
         Resource = [
-          "arn:aws:s3:::dvd-rental-lakehouse",
-          "arn:aws:s3:::dvd-rental-lakehouse/*"
+          data.aws_s3_bucket.hudi_data.arn,
+          "${data.aws_s3_bucket.hudi_data.arn}/*"
         ]
       }
     ]
@@ -228,37 +228,4 @@ resource "aws_iam_role_policy_attachment" "airflow_athena_glue_attach" {
 resource "aws_iam_instance_profile" "airflow_profile" {
   name = "Airflow_EC2_Profile_${random_id.bucket_suffix.hex}"
   role = aws_iam_role.airflow_role.name
-}
-
-# 5. Debezium Node Profile
-resource "aws_iam_role" "debezium_role" {
-  name = "Debezium_EC2_Role_${random_id.bucket_suffix.hex}"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "ec2.amazonaws.com"
-        }
-      }
-    ]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "debezium_ssm" {
-  role       = aws_iam_role.debezium_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-}
-
-resource "aws_iam_role_policy_attachment" "debezium_secrets_attach" {
-  role       = aws_iam_role.debezium_role.name
-  policy_arn = aws_iam_policy.producer_secrets.arn
-}
-
-resource "aws_iam_instance_profile" "debezium_profile" {
-  name = "Debezium_EC2_Profile_${random_id.bucket_suffix.hex}"
-  role = aws_iam_role.debezium_role.name
 }

@@ -41,9 +41,3 @@ variable "db_instance_class" {
   type        = string
   default     = "db.t3.micro"
 }
-
-variable "instance_type_debezium" {
-  description = "EC2 instance type for Debezium Kafka Connect"
-  type        = string
-  default     = "t3.small"
-}

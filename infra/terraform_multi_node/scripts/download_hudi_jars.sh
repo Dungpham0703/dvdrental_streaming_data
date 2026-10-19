@@ -14,7 +14,7 @@ SPARK_VERSION="3.5"
 KAFKA_SPARK_VERSION="3.5.0"
 HADOOP_AWS_VERSION="3.3.4"
 AWS_SDK_VERSION="1.12.261"
-S3_BUCKET="${1:-dvd-rental-lakehouse}"
+S3_BUCKET="${1:-dvdrental-hudi-lake-dzung-2026}"
 LOCAL_DIR="/tmp/hudi-jars-download"
 
 echo "================================================"

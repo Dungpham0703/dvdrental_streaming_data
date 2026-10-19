@@ -109,11 +109,6 @@ resource "aws_iam_role_policy_attachment" "producer_read_secrets" {
   policy_arn = aws_iam_policy.read_dvdrental_secrets.arn
 }
 
-resource "aws_iam_role_policy_attachment" "debezium_read_secrets" {
-  role       = aws_iam_role.debezium_role.name
-  policy_arn = aws_iam_policy.read_dvdrental_secrets.arn
-}
-
 # Outputs for reference
 output "secret_kafka_arn" {
   value = aws_secretsmanager_secret.kafka_bootstrap.arn
