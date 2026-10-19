@@ -95,6 +95,14 @@ resource "aws_security_group" "allow_all_internal" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
+    description = "SSH from outside"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -242,10 +250,10 @@ resource "aws_instance" "spark_master" {
     set -euo pipefail
     exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
 
-    echo "[*] Installing Docker, Python & AWS CLI on Ubuntu..."
+    echo "[*] Installing Docker & Python on Ubuntu..."
     export DEBIAN_FRONTEND=noninteractive
     apt-get update -y
-    apt-get install -y docker.io awscli python3-pip
+    apt-get install -y docker.io python3-pip
     pip3 install boto3 kafka-python --break-system-packages || pip3 install boto3 kafka-python
     systemctl enable --now docker
     usermod -aG docker ubuntu
@@ -396,22 +404,23 @@ resource "aws_instance" "producer" {
   }
 
   user_data = <<-EOF
-    #!/bin/bash
-    set -euo pipefail
-    exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+#!/bin/bash
+set -euo pipefail
+exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
 
-    echo "[*] Updating system & installing Docker, Compose, Git, AWS CLI, jq, postgresql-client, curl..."
-    export DEBIAN_FRONTEND=noninteractive
-    apt-get update -y
-    apt-get install -y docker.io docker-compose-v2 git awscli jq curl python3-pip build-essential postgresql-client
-    systemctl enable --now docker
-    usermod -aG docker ubuntu
+echo "[*] Updating system & installing Docker, Compose, Git, jq, curl..."
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -y
+apt-get install -y docker.io docker-compose-v2 git jq curl python3-pip build-essential postgresql-client
+snap install aws-cli --classic
+systemctl enable --now docker
+usermod -aG docker ubuntu
 
-    echo "[*] Installing Python libraries for Producer..."
-    pip3 install boto3 kafka-python lz4 --break-system-packages || pip3 install boto3 kafka-python lz4
+echo "[*] Installing Python libraries for Producer..."
+pip3 install boto3 kafka-python lz4 --break-system-packages || pip3 install boto3 kafka-python lz4
 
-    # 1. Enforce REPLICA IDENTITY FULL on PostgreSQL RDS
-    cat > /home/ubuntu/enforce_replica_identity.sh <<'SCRIPT_EOF'
+# 1. Enforce REPLICA IDENTITY FULL on PostgreSQL RDS
+cat > /home/ubuntu/enforce_replica_identity.sh <<'SCRIPT_EOF'
 #!/bin/bash
 set -euo pipefail
 echo "[*] Waiting for PostgreSQL RDS (${aws_db_instance.postgres.address}:5432) to accept connections..."
@@ -446,40 +455,46 @@ SQLEOF
 echo "[*] REPLICA IDENTITY FULL configured successfully."
 SCRIPT_EOF
 
-    chmod +x /home/ubuntu/enforce_replica_identity.sh
-    chown ubuntu:ubuntu /home/ubuntu/enforce_replica_identity.sh
-    /home/ubuntu/enforce_replica_identity.sh || true
+chmod +x /home/ubuntu/enforce_replica_identity.sh
+chown ubuntu:ubuntu /home/ubuntu/enforce_replica_identity.sh
+/home/ubuntu/enforce_replica_identity.sh || true
 
-    # 2. Start Debezium Kafka Connect container
-    echo "[*] Starting Debezium Kafka Connect container..."
-    KAFKA_BROKERS="${join(",", [for inst in aws_instance.kafka : "${inst.private_ip}:9092"])}"
-    docker run -d \
-      --name debezium-connect \
-      --network host \
-      --restart always \
-      -e GROUP_ID=debezium-cluster \
-      -e CONFIG_STORAGE_TOPIC=debezium_configs \
-      -e OFFSET_STORAGE_TOPIC=debezium_offsets \
-      -e STATUS_STORAGE_TOPIC=debezium_statuses \
-      -e CONFIG_STORAGE_REPLICATION_FACTOR=1 \
-      -e OFFSET_STORAGE_REPLICATION_FACTOR=1 \
-      -e STATUS_STORAGE_REPLICATION_FACTOR=1 \
-      -e BOOTSTRAP_SERVERS="$KAFKA_BROKERS" \
-      -e KEY_CONVERTER=org.apache.kafka.connect.json.JsonConverter \
-      -e VALUE_CONVERTER=org.apache.kafka.connect.json.JsonConverter \
-      -e KEY_CONVERTER_SCHEMAS_ENABLE=false \
-      -e VALUE_CONVERTER_SCHEMAS_ENABLE=false \
-      -e REST_PORT=8083 \
-      debezium/connect:2.5
+# 2. Start Debezium Kafka Connect container
+echo "[*] Starting Debezium Kafka Connect container..."
+KAFKA_BROKERS="${join(",", [for inst in aws_instance.kafka : "${inst.private_ip}:9092"])}"
+docker run -d \
+  --name debezium-connect \
+  --network host \
+  --restart always \
+  -e GROUP_ID=debezium-cluster \
+  -e CONFIG_STORAGE_TOPIC=debezium_configs \
+  -e OFFSET_STORAGE_TOPIC=debezium_offsets \
+  -e STATUS_STORAGE_TOPIC=debezium_statuses \
+  -e CONFIG_STORAGE_REPLICATION_FACTOR=1 \
+  -e OFFSET_STORAGE_REPLICATION_FACTOR=1 \
+  -e STATUS_STORAGE_REPLICATION_FACTOR=1 \
+  -e BOOTSTRAP_SERVERS="$KAFKA_BROKERS" \
+  -e KEY_CONVERTER=org.apache.kafka.connect.json.JsonConverter \
+  -e VALUE_CONVERTER=org.apache.kafka.connect.json.JsonConverter \
+  -e KEY_CONVERTER_SCHEMAS_ENABLE=false \
+  -e VALUE_CONVERTER_SCHEMAS_ENABLE=false \
+  -e REST_PORT=8083 \
+  debezium/connect:2.5
 
-    # 3. Register Debezium PostgreSQL Connector
-    echo "[*] Waiting for Debezium Kafka Connect REST API on port 8083..."
-    until curl -s http://127.0.0.1:8083/connectors >/dev/null 2>&1; do
-      sleep 5
-    done
+# 3. Register Debezium PostgreSQL Connector
+echo "[*] Waiting for Debezium Kafka Connect REST API on port 8083..."
+RETRY=0
+while [ $RETRY -lt 30 ]; do
+  if curl -s http://127.0.0.1:8083/connectors >/dev/null 2>&1; then
+    echo "Debezium REST API is ready!"
+    break
+  fi
+  sleep 5
+  RETRY=$((RETRY+1))
+done
 
-    echo "[*] Preparing Debezium connector registration payload..."
-    cat > /home/ubuntu/register-debezium.json <<'CONEOF'
+echo "[*] Preparing Debezium connector registration payload..."
+cat > /home/ubuntu/register-debezium.json <<'CONEOF'
 {
   "name": "dvdrental-connector",
   "config": {
@@ -500,35 +515,35 @@ SCRIPT_EOF
   }
 }
 CONEOF
-    chown ubuntu:ubuntu /home/ubuntu/register-debezium.json
+chown ubuntu:ubuntu /home/ubuntu/register-debezium.json
 
-    curl -i -X POST -H "Accept:application/json" -H "Content-Type:application/json" \
-      http://127.0.0.1:8083/connectors/ \
-      -d @/home/ubuntu/register-debezium.json || true
+curl -i -X POST -H "Accept:application/json" -H "Content-Type:application/json" \
+  http://127.0.0.1:8083/connectors/ \
+  -d @/home/ubuntu/register-debezium.json || true
 
-    # 4. Clone repo and start Airflow
-    echo "[*] Cloning dvdrental repository..."
-    APP_DIR="/home/ubuntu/dvdrental_streaming_data"
-    if [ ! -d "$APP_DIR" ]; then
-      git clone https://github.com/Dungpham0703/dvdrental_streaming_data.git "$APP_DIR"
-    else
-      cd "$APP_DIR" && git pull origin main
-    fi
+# 4. Clone repo and start Airflow
+echo "[*] Cloning dvdrental repository..."
+APP_DIR="/home/ubuntu/dvdrental_streaming_data"
+if [ ! -d "$APP_DIR" ]; then
+  git clone https://github.com/Dungpham0703/dvdrental_streaming_data.git "$APP_DIR"
+else
+  cd "$APP_DIR" && git pull origin main
+fi
 
-    echo "[*] Configuring Airflow environment..."
-    mkdir -p /home/ubuntu/.aws "$APP_DIR/pipelines/airflow/logs" "$APP_DIR/pipelines/airflow/plugins"
+echo "[*] Configuring Airflow environment..."
+mkdir -p /home/ubuntu/.aws "$APP_DIR/pipelines/airflow/logs" "$APP_DIR/pipelines/airflow/plugins"
 
-    echo "[*] Fetching Airflow secrets from Secrets Manager..."
-    AIRFLOW_SECRET=$(aws secretsmanager get-secret-value \
-      --secret-id dvdrental/airflow_config \
-      --region ${data.aws_region.current.name} \
-      --query SecretString --output text)
+echo "[*] Fetching Airflow secrets from Secrets Manager..."
+AIRFLOW_SECRET=$(aws secretsmanager get-secret-value \
+  --secret-id dvdrental/airflow_config \
+  --region ${data.aws_region.current.name} \
+  --query SecretString --output text)
 
-    AIRFLOW_USER=$(echo "$AIRFLOW_SECRET" | jq -r '.airflow_admin_username')
-    AIRFLOW_PASS=$(echo "$AIRFLOW_SECRET" | jq -r '.airflow_admin_password')
-    SLACK_URL=$(echo "$AIRFLOW_SECRET" | jq -r '.slack_webhook_url')
+AIRFLOW_USER=$(echo "$AIRFLOW_SECRET" | jq -r '.airflow_admin_username')
+AIRFLOW_PASS=$(echo "$AIRFLOW_SECRET" | jq -r '.airflow_admin_password')
+SLACK_URL=$(echo "$AIRFLOW_SECRET" | jq -r '.slack_webhook_url')
 
-    cat > "$APP_DIR/pipelines/airflow/.env" <<ENVEOF
+cat > "$APP_DIR/pipelines/airflow/.env" <<ENVEOF
 AIRFLOW_UID=50000
 AWS_REGION=${data.aws_region.current.name}
 ATHENA_S3_OUTPUT=s3://${data.aws_s3_bucket.hudi_data.bucket}/bronze/athena-results/
@@ -538,14 +553,14 @@ AIRFLOW__AWS__S3_BUCKET_NAME=s3://${data.aws_s3_bucket.hudi_data.bucket}/bronze/
 SLACK_WEBHOOK_URL=$SLACK_URL
 ENVEOF
 
-    chown -R ubuntu:ubuntu "$APP_DIR" /home/ubuntu/.aws
-    chmod -R 777 "$APP_DIR/pipelines/airflow/logs" "$APP_DIR/pipelines/airflow/plugins"
+chown -R ubuntu:ubuntu "$APP_DIR" /home/ubuntu/.aws
+chmod -R 777 "$APP_DIR/pipelines/airflow/logs" "$APP_DIR/pipelines/airflow/plugins"
 
-    echo "[*] Starting Airflow services via Docker Compose..."
-    cd "$APP_DIR/pipelines/airflow"
-    docker compose build
-    docker compose up -d
-  EOF
+echo "[*] Starting Airflow services via Docker Compose..."
+cd "$APP_DIR/pipelines/airflow"
+docker compose build
+docker compose up -d
+EOF
 
   tags = {
     Name = "Control-Node-Producer-Airflow-Debezium"

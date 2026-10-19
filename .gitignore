@@ -1,6 +1,8 @@
 .env
 *.env
 **/.env
+*.pem
+*.pub
 
 .DS_Store
 .vscode/
