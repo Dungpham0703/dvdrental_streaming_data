@@ -21,21 +21,20 @@ selected_columns_staff as (
         username,
         {{ debezium_ts_micros('last_update') }} as last_update,
         {{ debezium_ts_milies('__ts_ms') }} as cdc_capture_at,
-        __op,
-        cast(__deleted as boolean) as __deleted
+        case
+            when __op = 'd' or cast(__deleted as boolean) = true then true
+            else false
+        end as is_deleted
     from raw_staff
-),
-
-filtered_staff as (
-    select *
-    from selected_columns_staff
-    where __deleted = false or __deleted is null
 ),
 
 deduplicate_staff as (
     select *,
-        row_number() over (partition by staff_id order by cdc_capture_at desc) as dup_rank
-    from filtered_staff
+        row_number() over (
+            partition by staff_id
+            order by cdc_capture_at desc, is_deleted desc
+        ) as dup_rank
+    from selected_columns_staff
 )
 
 select
@@ -47,6 +46,8 @@ select
     store_id,
     is_active,
     username,
-    last_update
+    last_update,
+    cdc_capture_at,
+    is_deleted
 from deduplicate_staff
 where dup_rank = 1

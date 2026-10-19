@@ -44,7 +44,8 @@ selected_columns_rental as (
         {{ debezium_ts_milies('__ts_ms') }} as cdc_capture_at,
         __op,
         case
-            when __op = 'd' then true else false
+            when __op = 'd' or cast(__deleted as boolean) = true then true
+            else false
         end as is_deleted
     from raw_rental
 ),

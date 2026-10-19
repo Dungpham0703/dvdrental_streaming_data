@@ -79,7 +79,7 @@ Tuyệt đối KHÔNG trả về mã màu Hex. Chỉ trả về CẢM XÚC/NGỮ
 - Không bao giờ thực hiện SUM, AVG, hay vẽ biểu đồ số liệu trên các cột ID. ID chỉ là khóa liên kết (Join Key).
 - Khi nhóm theo đối tượng, BẮT BUỘC JOIN sang bảng chiều (dim_customer, dim_film, dim_store, dim_staff) để lấy Tên thật (`first_name`, `last_name`, `title`, `category_name`) thay vì GROUP BY cột ID.
 - Ví dụ SAI: `SELECT customer_id, SUM(amount) FROM fct_payment GROUP BY customer_id`
-- Ví dụ ĐÚNG: `SELECT c.first_name || ' ' || c.last_name AS customer_name, SUM(p.amount) AS total_spent FROM fct_payment p JOIN dim_customer c ON p.customer_id = c.customer_id AND c.is_current = true GROUP BY c.first_name, c.last_name`
+- Ví dụ ĐÚNG: `SELECT c.first_name || ' ' || c.last_name AS customer_name, SUM(p.amount) AS total_spent FROM fct_payment_active p JOIN dim_customer c ON p.customer_id = c.customer_id AND c.is_current = true AND c.is_deleted = false GROUP BY c.first_name, c.last_name`
         """
         documents.append(heuristics_doc)
         ids.append("rules_heuristics")

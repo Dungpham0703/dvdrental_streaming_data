@@ -2,7 +2,7 @@
   "database_name": "dvdrental_mart",
   "engine_type": "AWS Athena (Presto SQL)",
   "total_tables": 7,
-  "total_columns": 78,
+  "total_columns": 85,
   "dialect_rules": [
     "Sử dụng cú pháp Athena (Presto SQL).",
     "QUAN TRỌNG: Các cột thời gian (`payment_date`, `rental_date`) hiện đang được lưu dưới định dạng chuỗi `VARCHAR` trong Athena.",
@@ -10,39 +10,41 @@
     "Ví dụ sai: `year(payment_date)` -> LỖI. Ví dụ đúng: `year(cast(payment_date as timestamp))` hoặc `substr(payment_date, 1, 4)`.",
     "Tuyệt đối KHÔNG tạo các câu lệnh UPDATE, DELETE, DROP, INSERT, ALTER, TRUNCATE, CREATE.",
     "Luôn sử dụng ALIAS rõ ràng cho mọi cột tính toán (VD: `SUM(amount) AS total_revenue`).",
-    "Khi JOIN với dim_customer, LUÔN thêm `AND c.is_current = true` (SCD2).",
+    "QUAN TRỌNG VỀ SOFT DELETE: Ưu tiên dùng `fct_payment_active` và `fct_rental_active` để loại bỏ giao dịch đã bị xóa. Nếu dùng `fct_payment` / `fct_rental`, LUÔN thêm `WHERE is_deleted = false`.",
+    "Khi JOIN với dim_customer, LUÔN thêm `AND c.is_current = true AND c.is_deleted = false` (SCD2 và soft delete).",
+    "Khi truy vấn bảng chiều (dim_film, dim_store, dim_staff, dim_actor), LUÔN lọc bản ghi hoạt động: `is_deleted = false`.",
     "fct_payment và fct_rental đã có film_id, store_id enriched — KHÔNG cần join qua inventory hay bảng trung gian."
   ],
   "join_guide": [
     {
       "purpose": "Doanh thu theo khách hàng",
-      "join": "fct_payment p JOIN dim_customer c ON p.customer_id = c.customer_id AND c.is_current = true"
+      "join": "fct_payment_active p JOIN dim_customer c ON p.customer_id = c.customer_id AND c.is_current = true AND c.is_deleted = false"
     },
     {
       "purpose": "Doanh thu theo thể loại phim",
-      "join": "fct_payment p JOIN dim_film f ON p.film_id = f.film_id",
+      "join": "fct_payment_active p JOIN dim_film f ON p.film_id = f.film_id AND f.is_deleted = false",
       "note": "fct_payment đã có film_id enriched — KHÔNG cần join qua fct_rental"
     },
     {
       "purpose": "Doanh thu theo cửa hàng",
-      "join": "fct_payment p JOIN dim_store s ON p.store_id = s.store_id",
+      "join": "fct_payment_active p JOIN dim_store s ON p.store_id = s.store_id AND s.is_deleted = false",
       "note": "fct_payment đã có store_id enriched — KHÔNG cần join qua fct_rental"
     },
     {
       "purpose": "Doanh thu theo nhân viên",
-      "join": "fct_payment p JOIN dim_staff st ON p.staff_id = st.staff_id"
+      "join": "fct_payment_active p JOIN dim_staff st ON p.staff_id = st.staff_id AND st.is_deleted = false"
     },
     {
       "purpose": "Lượt thuê theo phim",
-      "join": "fct_rental r JOIN dim_film f ON r.film_id = f.film_id"
+      "join": "fct_rental_active r JOIN dim_film f ON r.film_id = f.film_id AND f.is_deleted = false"
     },
     {
       "purpose": "Lượt thuê theo khách hàng",
-      "join": "fct_rental r JOIN dim_customer c ON r.customer_id = c.customer_id AND c.is_current = true"
+      "join": "fct_rental_active r JOIN dim_customer c ON r.customer_id = c.customer_id AND c.is_current = true AND c.is_deleted = false"
     },
     {
       "purpose": "Doanh thu kèm thông tin thuê",
-      "join": "fct_payment p JOIN fct_rental r ON p.rental_id = r.rental_id"
+      "join": "fct_payment_active p JOIN fct_rental_active r ON p.rental_id = r.rental_id"
     }
   ],
   "tables": {
@@ -93,6 +95,11 @@
           "description": "Thời gian CDC capture (dùng cho incremental)",
           "data_type": "STRING (ISO 8601)",
           "role": "technical"
+        },
+        "is_deleted": {
+          "description": "Cờ soft delete từ CDC (true nếu bản ghi đã bị xóa, false nếu đang hoạt động)",
+          "data_type": "BOOLEAN",
+          "role": "attribute"
         }
       },
       "metrics": {
@@ -106,7 +113,8 @@
         "Doanh thu theo ngày: `date_format(payment_date, '%Y-%m-%d')` hoặc `date_trunc('day', payment_date)`",
         "JOIN tới dim_customer qua `customer_id`",
         "JOIN tới dim_film qua `film_id` (đã enriched, không cần qua fct_rental)",
-        "JOIN tới dim_store qua `store_id` (đã enriched, không cần qua fct_rental)"
+        "JOIN tới dim_store qua `store_id` (đã enriched, không cần qua fct_rental)",
+        "Bảo đảm tính đúng đắn dữ liệu: Ưu tiên truy vấn từ `fct_payment_active` hoặc lọc `WHERE is_deleted = false`"
       ],
       "relationships": [
         {
@@ -178,6 +186,11 @@
           "description": "Thời gian CDC capture (dùng cho incremental)",
           "data_type": "STRING (ISO 8601)",
           "role": "technical"
+        },
+        "is_deleted": {
+          "description": "Cờ soft delete từ CDC (true nếu bản ghi đã bị xóa, false nếu đang hoạt động)",
+          "data_type": "BOOLEAN",
+          "role": "attribute"
         }
       },
       "metrics": {
@@ -191,7 +204,8 @@
         "Phim chưa trả: `return_date IS NULL`",
         "JOIN tới dim_customer qua `customer_id`",
         "JOIN tới dim_film qua `film_id` (đã enriched, không cần qua inventory)",
-        "JOIN tới dim_store qua `store_id` (đã enriched)"
+        "JOIN tới dim_store qua `store_id` (đã enriched)",
+        "Bảo đảm tính đúng đắn dữ liệu: Ưu tiên truy vấn từ `fct_rental_active` hoặc lọc `WHERE is_deleted = false`"
       ],
       "relationships": [
         {
@@ -309,11 +323,16 @@
           "description": "SCD2: True nếu là bản ghi mới nhất (valid_to IS NULL)",
           "data_type": "BOOLEAN",
           "role": "scd2"
+        },
+        "is_deleted": {
+          "description": "Cờ soft delete từ CDC (true nếu bản ghi đã bị xóa, false nếu đang hoạt động)",
+          "data_type": "BOOLEAN",
+          "role": "attribute"
         }
       },
       "metrics": {},
       "business_rules": [
-        "⚠️ BẮT BUỘC: Luôn thêm `WHERE is_current = true` khi JOIN với bảng fact để lấy thông tin khách hàng hiện tại",
+        "⚠️ BẮT BUỘC: Luôn thêm `WHERE is_current = true AND is_deleted = false` khi JOIN với bảng fact hoặc phân tích khách hàng hiện tại còn hoạt động",
         "Nếu cần lịch sử thay đổi, bỏ điều kiện is_current",
         "Tên đầy đủ: `first_name || ' ' || last_name`",
         "Phân tích theo vùng: dùng `city_name`, `country_name`"
@@ -392,6 +411,11 @@
           "description": "Số lượng diễn viên tham gia",
           "data_type": "INTEGER",
           "role": "measure"
+        },
+        "is_deleted": {
+          "description": "Cờ soft delete từ CDC (true nếu bản ghi đã bị xóa, false nếu đang hoạt động)",
+          "data_type": "BOOLEAN",
+          "role": "attribute"
         }
       },
       "metrics": {
@@ -402,7 +426,8 @@
         "Phân tích theo thể loại: GROUP BY `category_name`",
         "Phân tích theo rating: GROUP BY `rating`",
         "Top phim hot: JOIN fct_rental → COUNT(rental_id) GROUP BY film_id",
-        "Phim giá thuê cao: ORDER BY `rental_rate` DESC"
+        "Phim giá thuê cao: ORDER BY `rental_rate` DESC",
+        "Bản ghi phim đang hoạt động: Luôn lọc `is_deleted = false`"
       ],
       "relationships": []
     },
@@ -458,12 +483,18 @@
           "description": "Số điện thoại cửa hàng",
           "data_type": "STRING",
           "role": "attribute"
+        },
+        "is_deleted": {
+          "description": "Cờ soft delete từ CDC (true nếu bản ghi đã bị xóa, false nếu đang hoạt động)",
+          "data_type": "BOOLEAN",
+          "role": "attribute"
         }
       },
       "metrics": {},
       "business_rules": [
         "Tên quản lý đầy đủ: `manager_first_name || ' ' || manager_last_name`",
-        "Phân tích theo cửa hàng: GROUP BY `store_id`"
+        "Phân tích theo cửa hàng: GROUP BY `store_id`",
+        "Bản ghi cửa hàng đang hoạt động: Luôn lọc `is_deleted = false`"
       ],
       "relationships": []
     },
@@ -539,12 +570,18 @@
           "description": "Số điện thoại",
           "data_type": "STRING",
           "role": "attribute"
+        },
+        "is_deleted": {
+          "description": "Cờ soft delete từ CDC (true nếu bản ghi đã bị xóa, false nếu đang hoạt động)",
+          "data_type": "BOOLEAN",
+          "role": "attribute"
         }
       },
       "metrics": {},
       "business_rules": [
         "Tên đầy đủ: `first_name || ' ' || last_name`",
-        "Phân tích hiệu suất nhân viên: JOIN fct_payment/fct_rental qua `staff_id`"
+        "Phân tích hiệu suất nhân viên: JOIN fct_payment/fct_rental qua `staff_id`",
+        "Bản ghi nhân viên đang hoạt động: Luôn lọc `is_deleted = false`"
       ],
       "relationships": [
         {
@@ -575,6 +612,11 @@
           "description": "Số lượng phim đã tham gia",
           "data_type": "INTEGER",
           "role": "measure"
+        },
+        "is_deleted": {
+          "description": "Cờ soft delete từ CDC (true nếu bản ghi đã bị xóa, false nếu đang hoạt động)",
+          "data_type": "BOOLEAN",
+          "role": "attribute"
         }
       },
       "metrics": {
@@ -582,7 +624,8 @@
       },
       "business_rules": [
         "Tên đầy đủ: `first_name || ' ' || last_name`",
-        "⚠️ Không có FK trực tiếp tới fct_rental hay fct_payment. Để phân tích doanh thu theo diễn viên, cần JOIN qua bảng trung gian stg_film_actor."
+        "⚠️ Không có FK trực tiếp tới fct_rental hay fct_payment. Để phân tích doanh thu theo diễn viên, cần JOIN qua bảng trung gian stg_film_actor.",
+        "Bản ghi diễn viên đang hoạt động: Luôn lọc `is_deleted = false`"
       ],
       "relationships": []
     }

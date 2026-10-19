@@ -60,14 +60,16 @@ Nhiệm vụ của bạn là nhận câu hỏi từ người dùng và trả v�
 === TỪ ĐIỂN THUẬT NGỮ KINH DOANH (BUSINESS GLOSSARY) ===
 - "Khách VIP", "Khách chi tiêu cao", "Khách hàng thân thiết": BẮT BUỘC dựa vào `ORDER BY SUM(p.amount) DESC` hoặc `COUNT(r.rental_id) DESC`. TUYỆT ĐỐI KHÔNG dùng hay tự chế các cột không có trong schema như `customer_type`, `customer_category`, `vip`!
 - "Tháng này", "Gần đây": Sử dụng hàm `substr(payment_date, 1, 7)` vì payment_date đang là kiểu VARCHAR, TUYỆT ĐỐI không dùng `year(payment_date)` nếu chưa ép kiểu.
-- "Doanh thu", "Thu nhập": Tính bằng SUM(amount) trong fct_payment.
-- "Khách hàng hiện tại": Bộ lọc c.is_current = true đối với bảng dim_customer (SCD2).
+- "Doanh thu", "Thu nhập": Ưu tiên dùng `dvdrental_mart.fct_payment_active` (hoặc tính bằng SUM(amount) trong fct_payment với điều kiện `WHERE is_deleted = false`).
+- "Lượt thuê": Ưu tiên dùng `dvdrental_mart.fct_rental_active` (hoặc fct_rental với điều kiện `WHERE is_deleted = false`).
+- "Khách hàng hiện tại": Bộ lọc `c.is_current = true AND c.is_deleted = false` đối với bảng dim_customer (SCD2 + soft delete).
+- "Bảng chiều (dim_film, dim_store, dim_staff, dim_actor)": Luôn lọc bản ghi hoạt động với `is_deleted = false`.
 - QUY TẮC NGHIÊM NGẶT (STRICT SCHEMA): CHỈ ĐƯỢC DÙNG CÁC CỘT CÓ TRONG THÔNG TIN BẢNG DƯỚI ĐÂY. KHÔNG TỰ TẠO HOẶC ĐOÁN CÁC CỘT KHÔNG CÓ TRONG SCHEMA.
 
 === QUY TẮC BẮT BUỘC (CHAIN OF THOUGHT) ===
 Trước khi viết SQL, bạn BẮT BUỘC phải tư duy theo 4 bước vào mảng `thought_process` để đảm bảo không bị sai logic (hallucination) và linh hoạt thiết kế Layout tỉ lệ đẹp:
 - Bước 1 - Phân tích: Xác định từ khóa tương ứng với bảng/cột.
-- Bước 2 - Điều kiện: Lọc ngầm (VD: `is_current = true`, nhóm thời gian).
+- Bước 2 - Điều kiện: Lọc ngầm (VD: `fct_payment_active`, `is_current = true`, `is_deleted = false`, nhóm thời gian).
 - Bước 3 - Heuristics UI/UX (Rất quan trọng): Quyết định loại Chart, Màu Sắc và Layout.
 
 Ví dụ minh họa cấu trúc JSON trả về:
@@ -84,9 +86,9 @@ Ví dụ minh họa cấu trúc JSON trả về:
        "Bước 4 - SQL: ..."
      ],
      "widgets": [
-       {{ "title": "Tổng Doanh Thu", "chartType": "stat", "colorIntent": "positive", "colSpan": 3, "sql": "SELECT SUM(amount) AS total_revenue FROM dvdrental_mart.fct_payment;" }},
-       {{ "title": "Tổng Giao Dịch", "chartType": "stat", "colorIntent": "positive", "colSpan": 3, "sql": "SELECT COUNT(payment_id) AS total_transactions FROM dvdrental_mart.fct_payment;" }},
-       {{ "title": "Tỷ Trọng Doanh Thu", "chartType": "donut", "colorIntent": "categorical", "colSpan": 5, "sql": "SELECT trim(cat) AS category, SUM(p.amount) AS revenue FROM dvdrental_mart.fct_payment p JOIN dvdrental_mart.dim_film f ON p.film_id = f.film_id CROSS JOIN UNNEST(split(f.category_name, ',')) AS t(cat) GROUP BY trim(cat) ORDER BY revenue DESC LIMIT 5;" }}
+       {{ "title": "Tổng Doanh Thu", "chartType": "stat", "colorIntent": "positive", "colSpan": 3, "sql": "SELECT SUM(amount) AS total_revenue FROM dvdrental_mart.fct_payment_active;" }},
+       {{ "title": "Tổng Giao Dịch", "chartType": "stat", "colorIntent": "positive", "colSpan": 3, "sql": "SELECT COUNT(payment_id) AS total_transactions FROM dvdrental_mart.fct_payment_active;" }},
+       {{ "title": "Tỷ Trọng Doanh Thu", "chartType": "donut", "colorIntent": "categorical", "colSpan": 5, "sql": "SELECT trim(cat) AS category, SUM(p.amount) AS revenue FROM dvdrental_mart.fct_payment_active p JOIN dvdrental_mart.dim_film f ON p.film_id = f.film_id AND f.is_deleted = false CROSS JOIN UNNEST(split(f.category_name, ',')) AS t(cat) GROUP BY trim(cat) ORDER BY revenue DESC LIMIT 5;" }}
      ]
    }}
    ```

@@ -51,7 +51,7 @@ class TestCdcSoftDeleteModelStructure(unittest.TestCase):
         self.assertIn("update_condition=", content)
         self.assertIn("src.cdc_capture_at > target.cdc_capture_at", content)
         self.assertIn("merge_update_columns_rules=", content)
-        self.assertIn("when __op = 'd' then true", content)
+        self.assertIn("__op = 'd'", content)
         self.assertIn("is_deleted desc", content)
 
     def test_stg_payment_has_soft_delete_config(self) -> None:
@@ -60,7 +60,7 @@ class TestCdcSoftDeleteModelStructure(unittest.TestCase):
         self.assertIn("update_condition=", content)
         self.assertIn("src.cdc_capture_at > target.cdc_capture_at", content)
         self.assertIn("merge_update_columns_rules=", content)
-        self.assertIn("when __op = 'd' then true", content)
+        self.assertIn("__op = 'd'", content)
         self.assertIn("is_deleted desc", content)
 
     def test_fct_rental_retains_soft_deletes_with_ordering(self) -> None:
@@ -104,6 +104,59 @@ class TestCdcSoftDeleteModelStructure(unittest.TestCase):
     def test_int_customer_rental_summary_filters_soft_deleted(self) -> None:
         content = self.int_summary_model.read_text(encoding="utf-8")
         self.assertIn("where is_deleted = false", content)
+
+    def test_staging_dimensions_have_soft_delete_and_ordering(self) -> None:
+        for dim_file in [
+            "stg_film.sql",
+            "stg_customer.sql",
+            "stg_actor.sql",
+            "stg_address.sql",
+            "stg_staff.sql",
+            "stg_store.sql",
+        ]:
+            model_path = self.repo_root / f"pipelines/dbt/models/staging/{dim_file}"
+            content = model_path.read_text(encoding="utf-8")
+            self.assertIn(
+                "is_deleted", content, f"{dim_file} missing is_deleted column"
+            )
+            self.assertIn(
+                "order by cdc_capture_at desc, is_deleted desc",
+                content,
+                f"{dim_file} missing is_deleted tie-breaker",
+            )
+            self.assertNotIn(
+                "where __deleted = false",
+                content,
+                f"{dim_file} should not filter before deduplication",
+            )
+
+    def test_metabase_setup_uses_active_views_and_filters_deleted(self) -> None:
+        metabase_file = self.repo_root / "infra/docker/metabase/setup_metabase.py"
+        if not metabase_file.exists():
+            self.skipTest("infra/docker/metabase/setup_metabase.py does not exist")
+        content = metabase_file.read_text(encoding="utf-8")
+        self.assertNotIn("dvdrental_mart.fct_payment ", content)
+        self.assertNotIn("dvdrental_mart.fct_rental ", content)
+        self.assertIn("dvdrental_mart.fct_payment_active", content)
+        self.assertIn("dvdrental_mart.fct_rental_active", content)
+        self.assertIn("is_deleted = false", content)
+
+    def test_ai_agent_semantic_dictionary_includes_soft_delete(self) -> None:
+        semantic_file = self.repo_root / "apps/ai_agent/semantic_dictionary.json"
+        import json
+
+        with open(semantic_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        for tbl_name, tbl_info in data["tables"].items():
+            self.assertIn(
+                "is_deleted",
+                tbl_info["columns"],
+                f"{tbl_name} missing is_deleted column",
+            )
+        join_guide_str = json.dumps(data["join_guide"])
+        self.assertIn("fct_payment_active", join_guide_str)
+        self.assertIn("fct_rental_active", join_guide_str)
+        self.assertIn("is_deleted = false", join_guide_str)
 
 
 class TestCdcSoftDeleteMergeLifecycleSimulation(unittest.TestCase):

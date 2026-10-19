@@ -14,6 +14,7 @@ actor_counts as (
         film_id,
         count(*) as actor_count
     from {{ ref('stg_film_actor') }}
+    where coalesce(is_deleted, false) = false
     group by film_id
 ),
 
@@ -31,7 +32,8 @@ final as (
         fd.replacement_cost,
         fd.rating,
         fd.special_features,
-        coalesce(ac.actor_count, 0) as actor_count
+        coalesce(ac.actor_count, 0) as actor_count,
+        fd.is_deleted
     from film_details fd
     left join actor_counts ac
         on fd.film_id = ac.film_id

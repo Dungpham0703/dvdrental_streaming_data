@@ -28,7 +28,8 @@ final as (
         addr.city_name,
         addr.country_name,
         addr.postal_code,
-        addr.phone
+        addr.phone,
+        st.is_deleted
     from staff st
     left join addresses addr
         on st.address_id = addr.address_id

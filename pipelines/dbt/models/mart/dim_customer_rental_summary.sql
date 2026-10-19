@@ -54,6 +54,7 @@ final as (
     left join customer_rental_summary crs
         on dc.customer_id = crs.customer_id
     where dc.is_current = true
+      and dc.is_deleted = false
 )
 
 select * from final

@@ -39,7 +39,8 @@ final as (
         case
             when sc.dbt_valid_to is null then true
             else false
-        end as is_current
+        end as is_current,
+        coalesce(sc.is_deleted, false) as is_deleted
 
     from snapshot_customer sc
     left join addresses addr

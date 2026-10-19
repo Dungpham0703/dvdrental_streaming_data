@@ -21,6 +21,8 @@ film_category_agg as (
     from film_categories fc
     left join categories c
         on fc.category_id = c.category_id
+    where coalesce(fc.is_deleted, false) = false
+      and coalesce(c.is_deleted, false) = false
     group by fc.film_id
 )
 
@@ -37,7 +39,8 @@ select
     f.replacement_cost,
     f.rating,
     f.special_features,
-    f.last_update
+    f.last_update,
+    f.is_deleted
 from films f
 left join languages l
     on f.language_id = l.language_id
