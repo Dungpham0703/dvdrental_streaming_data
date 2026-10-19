@@ -158,6 +158,34 @@ class TestCdcSoftDeleteModelStructure(unittest.TestCase):
         self.assertIn("fct_rental_active", join_guide_str)
         self.assertIn("is_deleted = false", join_guide_str)
 
+    def test_verify_wal_replica_identity_script_exists_and_covers_tables(self) -> None:
+        script_path = self.repo_root / "scripts/ops/verify_wal_replica_identity.py"
+        self.assertTrue(
+            script_path.exists(), "verify_wal_replica_identity.py must exist"
+        )
+        content = script_path.read_text(encoding="utf-8")
+        self.assertIn("REPLICA IDENTITY FULL", content)
+        self.assertIn("relreplident", content)
+        for tbl in ["film", "customer", "rental", "payment", "store", "staff"]:
+            self.assertIn(f'"{tbl}"', content)
+
+    def test_fct_rental_self_healing_pattern(self) -> None:
+        content = self.fct_rental_model.read_text(encoding="utf-8")
+        self.assertIn("orphaned_rentals", content)
+        self.assertIn("customer_key = '-1'", content)
+        self.assertIn(
+            "target.customer_key = \\'-1\\' and src.customer_key != \\'-1\\'", content
+        )
+        self.assertIn("combined_rentals", content)
+
+    def test_snap_customer_explicit_check_cols(self) -> None:
+        snap_path = self.repo_root / "pipelines/dbt/snapshots/snap_customer.sql"
+        content = snap_path.read_text(encoding="utf-8")
+        self.assertNotIn("check_cols='all'", content)
+        self.assertIn("'is_deleted'", content)
+        self.assertNotIn("'cdc_capture_at'", content)
+        self.assertNotIn("'last_update'", content)
+
 
 class TestCdcSoftDeleteMergeLifecycleSimulation(unittest.TestCase):
     """Simulate SQLite-based state transitions for Iceberg MERGE soft delete contract.
@@ -555,6 +583,56 @@ class TestCdcSoftDeleteMergeLifecycleSimulation(unittest.TestCase):
             "SELECT COALESCE(SUM(amount), 0.0) as revenue FROM target_fct_payment WHERE is_deleted = 0"
         )
         self.assertEqual(self.cur.fetchone()["revenue"], 10.00)
+
+    def test_t10_self_healing_resolves_orphaned_customer_key(self) -> None:
+        # Simulate target fact table with an orphaned row (customer_key = '-1')
+        self.cur.execute("""
+            CREATE TABLE IF NOT EXISTS target_fct_rental_sim (
+                rental_id INTEGER PRIMARY KEY,
+                customer_key TEXT,
+                customer_id INTEGER,
+                cdc_capture_at TEXT,
+                is_deleted INTEGER DEFAULT 0
+            )
+        """)
+        self.cur.execute("""
+            INSERT INTO target_fct_rental_sim VALUES (101, '-1', 50, '2026-10-18 01:00:00.000', 0)
+        """)
+        self.conn.commit()
+
+        # Self-healing incoming row with same cdc_capture_at but resolved customer_key
+        src_row = {
+            "rental_id": 101,
+            "customer_key": "scd_key_cust_50_v1",
+            "customer_id": 50,
+            "cdc_capture_at": "2026-10-18 01:00:00.000",
+            "is_deleted": 0,
+        }
+
+        # Apply self-healing update condition:
+        # (src.cdc_capture_at > target.cdc_capture_at or (src.cdc_capture_at = target.cdc_capture_at and src.is_deleted = 1) or (target.customer_key = '-1' and src.customer_key != '-1'))
+        update_cond = """
+            UPDATE target_fct_rental_sim
+            SET customer_key = :customer_key
+            WHERE rental_id = :rental_id
+              AND (
+                  :cdc_capture_at > cdc_capture_at
+                  OR (:cdc_capture_at = cdc_capture_at AND :is_deleted = 1)
+                  OR (customer_key = '-1' AND :customer_key != '-1')
+              )
+        """
+        self.cur.execute(update_cond, src_row)
+        self.conn.commit()
+
+        self.cur.execute(
+            "SELECT customer_key FROM target_fct_rental_sim WHERE rental_id = 101"
+        )
+        resolved_key = self.cur.fetchone()["customer_key"]
+        self.assertEqual(
+            resolved_key,
+            "scd_key_cust_50_v1",
+            "Orphaned '-1' customer key must self-heal to resolved SCD2 key",
+        )
 
 
 if __name__ == "__main__":

@@ -525,6 +525,36 @@ resource "aws_instance" "airflow" {
       cd "$APP_DIR" && git pull origin main
     fi
 
+    echo "[*] Waiting for PostgreSQL RDS (${aws_db_instance.postgres.address}:5432) to accept connections..."
+    export PGPASSWORD="${var.db_password}"
+    MAX_RETRIES=30
+    COUNT=0
+    until psql -h "${aws_db_instance.postgres.address}" -p "${aws_db_instance.postgres.port}" -U "${var.db_username}" -d "${var.db_name}" -c '\q' >/dev/null 2>&1 || [ $COUNT -eq $MAX_RETRIES ]; do
+      echo "Waiting for RDS PostgreSQL to be ready ($COUNT/$MAX_RETRIES)..."
+      sleep 10
+      COUNT=$((COUNT+1))
+    done
+
+    echo "[*] Enforcing REPLICA IDENTITY FULL on transactional tables for Debezium CDC..."
+    psql -h "${aws_db_instance.postgres.address}" -p "${aws_db_instance.postgres.port}" -U "${var.db_username}" -d "${var.db_name}" <<'SQLEOF'
+      DO $$
+      DECLARE
+        t text;
+        tbls text[] := ARRAY[
+          'actor', 'address', 'category', 'city', 'country',
+          'customer', 'film', 'film_actor', 'film_category',
+          'inventory', 'language', 'payment', 'rental', 'staff', 'store'
+        ];
+      BEGIN
+        FOREACH t IN ARRAY tbls LOOP
+          IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = t) THEN
+            EXECUTE 'ALTER TABLE public.' || quote_ident(t) || ' REPLICA IDENTITY FULL;';
+            RAISE NOTICE 'Configured REPLICA IDENTITY FULL on public.%', t;
+          END IF;
+        END LOOP;
+      END $$;
+SQLEOF
+
     echo "[*] Configuring Airflow environment..."
     mkdir -p /home/ubuntu/.aws "$APP_DIR/pipelines/airflow/logs" "$APP_DIR/pipelines/airflow/plugins"
 
@@ -646,6 +676,18 @@ resource "aws_db_parameter_group" "postgres_logical" {
     apply_method = "pending-reboot"
   }
 
+  parameter {
+    name         = "max_slot_wal_keep_size"
+    value        = "10240"
+    apply_method = "immediate"
+  }
+
+  parameter {
+    name         = "wal_sender_timeout"
+    value        = "0"
+    apply_method = "immediate"
+  }
+
   tags = {
     Name    = "${var.project_name}-pg-logical"
     Project = var.project_name
@@ -672,6 +714,7 @@ resource "aws_db_instance" "postgres" {
   skip_final_snapshot     = true
   deletion_protection     = false
   backup_retention_period = 7
+  apply_immediately       = true
 
   tags = {
     Name    = "${var.project_name}-postgres"

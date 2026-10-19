@@ -4,7 +4,7 @@
         incremental_strategy='merge',
         unique_key='rental_id',
         insert_condition='(src.is_deleted = false)',
-        update_condition='(src.cdc_capture_at > target.cdc_capture_at or (src.cdc_capture_at = target.cdc_capture_at and src.is_deleted = true))',
+        update_condition='(src.cdc_capture_at > target.cdc_capture_at or (src.cdc_capture_at = target.cdc_capture_at and src.is_deleted = true) or (target.customer_key = \'-1\' and src.customer_key != \'-1\'))',
         merge_update_columns_rules={
             'rental_date': 'case when src.is_deleted then _old_ else _new_ end',
             'rental_date_day': 'case when src.is_deleted then _old_ else _new_ end',
@@ -23,7 +23,7 @@
     )
 }}
 
-with rentals as (
+with new_rentals as (
     select * from {{ ref('stg_rental') }}
     {% if is_incremental() %}
     where cdc_capture_at >= (
@@ -35,6 +35,29 @@ with rentals as (
     )
     {% endif %}
 ),
+
+{% if is_incremental() %}
+orphaned_rentals as (
+    select s.*
+    from {{ ref('stg_rental') }} s
+    inner join (
+        select rental_id
+        from {{ this }}
+        where customer_key = '-1'
+          and is_deleted = false
+    ) o on s.rental_id = o.rental_id
+),
+
+combined_rentals as (
+    select * from new_rentals
+    union
+    select * from orphaned_rentals
+),
+{% else %}
+combined_rentals as (
+    select * from new_rentals
+),
+{% endif %}
 
 inventory as (
     select * from {{ ref('stg_inventory') }}
@@ -71,7 +94,7 @@ final as (
         end as rental_duration_days,
         r.cdc_capture_at,
         r.is_deleted
-    from rentals r
+    from combined_rentals r
     left join inventory i
         on r.inventory_id = i.inventory_id
     left join customers c

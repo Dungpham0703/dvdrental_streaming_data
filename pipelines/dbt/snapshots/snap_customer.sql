@@ -5,7 +5,16 @@
         target_schema='dvdrental_staging',
         unique_key='customer_id',
         strategy='check',
-        check_cols='all',
+        check_cols=[
+            'store_id',
+            'first_name',
+            'last_name',
+            'email',
+            'address_id',
+            'is_active',
+            'active',
+            'is_deleted'
+        ],
         table_type='iceberg'
     )
 }}
