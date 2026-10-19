@@ -15,6 +15,7 @@
     "table.include.list": "public.rental,public.payment,public.inventory",
     "snapshot.mode": "always",
     "slot.name": "debezium_fact_slot",
+    "publication.name": "debezium_fact_pub",
     "publication.autocreate.mode": "filtered",
     "decimal.handling.mode": "string",
 

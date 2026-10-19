@@ -15,6 +15,7 @@
     "table.include.list": "public.language,public.category,public.country,public.city,public.actor,public.address,public.film_actor,public.film_category",
     "snapshot.mode": "always",
     "slot.name": "debezium_dim_static_slot",
+    "publication.name": "debezium_dim_static_pub",
     "publication.autocreate.mode": "filtered",
     "decimal.handling.mode": "string",
 

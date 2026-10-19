@@ -257,9 +257,11 @@ resource "aws_instance" "spark_master" {
     pip3 install boto3 kafka-python --break-system-packages || pip3 install boto3 kafka-python
     systemctl enable --now docker
     usermod -aG docker ubuntu
+    snap install aws-cli --classic
 
     MASTER_IP="${cidrhost(aws_subnet.main.cidr_block, 110)}"
     mkdir -p /opt/hudi-configs /opt/hudi-jars
+    chown -R ubuntu:ubuntu /opt/hudi-configs /opt/hudi-jars
 
     echo "[*] Running Spark Master via Docker..."
     docker run -d \
@@ -459,7 +461,16 @@ chmod +x /home/ubuntu/enforce_replica_identity.sh
 chown ubuntu:ubuntu /home/ubuntu/enforce_replica_identity.sh
 /home/ubuntu/enforce_replica_identity.sh || true
 
-# 2. Start Debezium Kafka Connect container
+# 2. Clone repository first
+echo "[*] Cloning dvdrental repository..."
+APP_DIR="/home/ubuntu/dvdrental_streaming_data"
+if [ ! -d "$APP_DIR" ]; then
+  git clone https://github.com/Dungpham0703/dvdrental_streaming_data.git "$APP_DIR"
+else
+  cd "$APP_DIR" && git pull origin main
+fi
+
+# 3. Start Debezium Kafka Connect container
 echo "[*] Starting Debezium Kafka Connect container..."
 KAFKA_BROKERS="${join(",", [for inst in aws_instance.kafka : "${inst.private_ip}:9092"])}"
 docker run -d \
@@ -478,10 +489,16 @@ docker run -d \
   -e VALUE_CONVERTER=org.apache.kafka.connect.json.JsonConverter \
   -e KEY_CONVERTER_SCHEMAS_ENABLE=false \
   -e VALUE_CONVERTER_SCHEMAS_ENABLE=false \
+  -e CONNECT_CONFIG_PROVIDERS=env \
+  -e CONNECT_CONFIG_PROVIDERS_ENV_CLASS=org.apache.kafka.common.config.provider.EnvVarConfigProvider \
+  -e DB_HOST="${aws_db_instance.postgres.address}" \
+  -e DB_USER="${var.db_username}" \
+  -e DB_PASS="${var.db_password}" \
+  -e DB_NAME="${var.db_name}" \
   -e REST_PORT=8083 \
-  debezium/connect:2.5
+  quay.io/debezium/connect:2.7
 
-# 3. Register Debezium PostgreSQL Connector
+# 4. Register Debezium Connectors (dim_core, dim_static, fact)
 echo "[*] Waiting for Debezium Kafka Connect REST API on port 8083..."
 RETRY=0
 while [ $RETRY -lt 30 ]; do
@@ -493,43 +510,11 @@ while [ $RETRY -lt 30 ]; do
   RETRY=$((RETRY+1))
 done
 
-echo "[*] Preparing Debezium connector registration payload..."
-cat > /home/ubuntu/register-debezium.json <<'CONEOF'
-{
-  "name": "dvdrental-connector",
-  "config": {
-    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
-    "tasks.max": "1",
-    "plugin.name": "pgoutput",
-    "database.hostname": "${aws_db_instance.postgres.address}",
-    "database.port": "5432",
-    "database.user": "${var.db_username}",
-    "database.password": "${var.db_password}",
-    "database.dbname": "${var.db_name}",
-    "database.server.name": "dvdrental",
-    "topic.prefix": "cdc.public",
-    "schema.include.list": "public",
-    "table.include.list": "public.actor,public.address,public.category,public.city,public.country,public.customer,public.film,public.film_actor,public.film_category,public.inventory,public.language,public.payment,public.rental,public.staff,public.store",
-    "tombstones.on.delete": "false",
-    "decimal.handling.mode": "double"
-  }
-}
-CONEOF
-chown ubuntu:ubuntu /home/ubuntu/register-debezium.json
+echo "[*] Registering Debezium connectors via manage_connectors.py..."
+pip3 install requests urllib3 --break-system-packages || pip3 install requests urllib3
+python3 "$APP_DIR/infra/docker/debezium/manage_connectors.py" || true
 
-curl -i -X POST -H "Accept:application/json" -H "Content-Type:application/json" \
-  http://127.0.0.1:8083/connectors/ \
-  -d @/home/ubuntu/register-debezium.json || true
-
-# 4. Clone repo and start Airflow
-echo "[*] Cloning dvdrental repository..."
-APP_DIR="/home/ubuntu/dvdrental_streaming_data"
-if [ ! -d "$APP_DIR" ]; then
-  git clone https://github.com/Dungpham0703/dvdrental_streaming_data.git "$APP_DIR"
-else
-  cd "$APP_DIR" && git pull origin main
-fi
-
+# 5. Start Airflow
 echo "[*] Configuring Airflow environment..."
 mkdir -p /home/ubuntu/.aws "$APP_DIR/pipelines/airflow/logs" "$APP_DIR/pipelines/airflow/plugins"
 
@@ -552,6 +537,24 @@ _AIRFLOW_WWW_USER_PASSWORD=$AIRFLOW_PASS
 AIRFLOW__AWS__S3_BUCKET_NAME=s3://${data.aws_s3_bucket.hudi_data.bucket}/bronze/athena-results/
 SLACK_WEBHOOK_URL=$SLACK_URL
 ENVEOF
+
+cat > "$APP_DIR/pipelines/dbt/profiles.yml" <<PROFEOF
+dvdrental_athena_dzung:
+  target: dev
+  outputs:
+    dev:
+      type: athena
+      s3_staging_dir: "s3://${data.aws_s3_bucket.hudi_data.bucket}/athena-results/"
+      s3_data_dir: "s3://${data.aws_s3_bucket.hudi_data.bucket}/"
+      s3_data_naming: "schema_table_unique"
+      region_name: "${data.aws_region.current.name}"
+      schema: "dvdrental"
+      database: "awsdatacatalog"
+      work_group: "primary"
+      threads: 4
+      session_properties:
+        timestamp_precision: "MILLISECONDS"
+PROFEOF
 
 chown -R ubuntu:ubuntu "$APP_DIR" /home/ubuntu/.aws
 chmod -R 777 "$APP_DIR/pipelines/airflow/logs" "$APP_DIR/pipelines/airflow/plugins"

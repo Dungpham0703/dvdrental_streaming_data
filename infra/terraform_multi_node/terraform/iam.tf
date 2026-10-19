@@ -66,7 +66,10 @@ resource "aws_iam_policy" "spark_s3_custom" {
           "s3:GetObject",
           "s3:PutObject",
           "s3:ListBucket",
-          "s3:DeleteObject"
+          "s3:DeleteObject",
+          "s3:GetBucketLocation",
+          "s3:ListBucketMultipartUploads",
+          "s3:AbortMultipartUpload"
         ]
         Effect = "Allow"
         Resource = [
@@ -203,13 +206,19 @@ resource "aws_iam_policy" "airflow_athena_glue" {
         Action = [
           "glue:GetDatabase",
           "glue:GetDatabases",
+          "glue:CreateDatabase",
+          "glue:UpdateDatabase",
+          "glue:DeleteDatabase",
           "glue:GetTable",
           "glue:GetTables",
+          "glue:GetTableVersion",
+          "glue:GetTableVersions",
           "glue:GetPartition",
           "glue:GetPartitions",
           "glue:CreateTable",
           "glue:UpdateTable",
           "glue:DeleteTable",
+          "glue:BatchGetPartition",
           "glue:BatchCreatePartition",
           "glue:BatchDeletePartition"
         ]

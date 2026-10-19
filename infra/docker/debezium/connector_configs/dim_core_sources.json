@@ -15,6 +15,7 @@
     "table.include.list": "public.film,public.customer,public.store,public.staff",
     "snapshot.mode": "always",
     "slot.name": "debezium_dim_core_slot",
+    "publication.name": "debezium_dim_core_pub",
     "publication.autocreate.mode": "filtered",
     "decimal.handling.mode": "string",
 
