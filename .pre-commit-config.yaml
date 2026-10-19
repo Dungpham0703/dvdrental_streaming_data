@@ -24,3 +24,12 @@ repos:
     rev: v0.10.0
     hooks:
       - id: shellcheck
+
+  - repo: local
+    hooks:
+      - id: forbid-secret-files
+        name: Prevent committing sensitive files (.env, .tfvars)
+        entry: Cannot commit real environment (.env) or terraform vars (.tfvars) files. Use *.example instead.
+        language: fail
+        files: (^|/)(\.env|\.env\..*|.*\.tfvars|.*\.tfvars\..*)
+        exclude: \.example$
