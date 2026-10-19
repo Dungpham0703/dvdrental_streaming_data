@@ -16,3 +16,34 @@ variable "slack_webhook_url" {
   type        = string
   sensitive   = true
 }
+
+variable "db_name" {
+  description = "PostgreSQL Database Name"
+  type        = string
+  default     = "dvdrental"
+}
+
+variable "db_username" {
+  description = "PostgreSQL Master Username"
+  type        = string
+  default     = "postgres"
+}
+
+variable "db_password" {
+  description = "PostgreSQL Master Password"
+  type        = string
+  default     = "postgres123456"
+  sensitive   = true
+}
+
+variable "db_instance_class" {
+  description = "RDS PostgreSQL Instance Class (Free-Tier eligible)"
+  type        = string
+  default     = "db.t3.micro"
+}
+
+variable "instance_type_debezium" {
+  description = "EC2 instance type for Debezium Kafka Connect"
+  type        = string
+  default     = "t3.small"
+}

@@ -51,7 +51,26 @@ resource "aws_secretsmanager_secret_version" "airflow_config" {
   })
 }
 
-# Grant read access for secrets to Spark, Kafka, and Producer nodes
+# Secret 4: RDS PostgreSQL Connection Info
+resource "aws_secretsmanager_secret" "rds_postgres" {
+  name                    = "dvdrental/rds_postgres"
+  description             = "PostgreSQL RDS connection details and credentials"
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "rds_postgres" {
+  secret_id = aws_secretsmanager_secret.rds_postgres.id
+  secret_string = jsonencode({
+    host     = aws_db_instance.postgres.address
+    port     = aws_db_instance.postgres.port
+    dbname   = var.db_name
+    username = var.db_username
+    password = var.db_password
+    endpoint = aws_db_instance.postgres.endpoint
+  })
+}
+
+# Grant read access for secrets to Spark, Kafka, Producer, and Debezium nodes
 resource "aws_iam_policy" "read_dvdrental_secrets" {
   name        = "ReadDvdrentalSecrets_${random_id.bucket_suffix.hex}"
   description = "Allow reading dvdrental secrets from Secrets Manager"
@@ -67,7 +86,8 @@ resource "aws_iam_policy" "read_dvdrental_secrets" {
         Resource = [
           aws_secretsmanager_secret.kafka_bootstrap.arn,
           aws_secretsmanager_secret.s3_config.arn,
-          aws_secretsmanager_secret.airflow_config.arn
+          aws_secretsmanager_secret.airflow_config.arn,
+          aws_secretsmanager_secret.rds_postgres.arn
         ]
       }
     ]
@@ -89,6 +109,11 @@ resource "aws_iam_role_policy_attachment" "producer_read_secrets" {
   policy_arn = aws_iam_policy.read_dvdrental_secrets.arn
 }
 
+resource "aws_iam_role_policy_attachment" "debezium_read_secrets" {
+  role       = aws_iam_role.debezium_role.name
+  policy_arn = aws_iam_policy.read_dvdrental_secrets.arn
+}
+
 # Outputs for reference
 output "secret_kafka_arn" {
   value = aws_secretsmanager_secret.kafka_bootstrap.arn
@@ -100,4 +125,8 @@ output "secret_s3_arn" {
 
 output "secret_airflow_arn" {
   value = aws_secretsmanager_secret.airflow_config.arn
+}
+
+output "secret_rds_arn" {
+  value = aws_secretsmanager_secret.rds_postgres.arn
 }

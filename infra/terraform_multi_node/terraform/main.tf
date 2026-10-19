@@ -39,7 +39,16 @@ resource "aws_subnet" "main" {
   cidr_block              = "172.31.16.0/24"
   map_public_ip_on_launch = true
   availability_zone       = "${data.aws_region.current.name}a"
-  tags                    = { Name = "kafka-hudi-subnet" }
+  tags                    = { Name = "kafka-hudi-subnet-a" }
+}
+
+# RDS requires subnets in at least 2 Availability Zones
+resource "aws_subnet" "secondary" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = "172.31.32.0/24"
+  map_public_ip_on_launch = true
+  availability_zone       = "${data.aws_region.current.name}b"
+  tags                    = { Name = "kafka-hudi-subnet-b" }
 }
 
 resource "aws_internet_gateway" "gw" {
@@ -59,6 +68,20 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
+resource "aws_route_table_association" "secondary" {
+  subnet_id      = aws_subnet.secondary.id
+  route_table_id = aws_route_table.public.id
+}
+
+resource "aws_db_subnet_group" "postgres" {
+  name       = "dvdrental-db-subnet-group-${random_id.bucket_suffix.hex}"
+  subnet_ids = [aws_subnet.main.id, aws_subnet.secondary.id]
+
+  tags = {
+    Name = "dvdrental-db-subnet-group"
+  }
+}
+
 resource "aws_vpc_endpoint" "s3" {
   vpc_id            = aws_vpc.main.id
   service_name      = "com.amazonaws.${data.aws_region.current.name}.s3"
@@ -75,28 +98,80 @@ resource "aws_security_group" "allow_all_internal" {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
-    cidr_blocks = ["172.31.16.0/24"]
+    cidr_blocks = [aws_vpc.main.cidr_block]
   }
 
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
-    cidr_blocks = ["172.31.16.0/24"]
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+resource "aws_security_group" "rds" {
+  name        = "rds_sg_${random_id.bucket_suffix.hex}"
+  description = "Security group for RDS PostgreSQL"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    description = "PostgreSQL port from VPC"
+    from_port   = 5432
+    to_port     = 5432
+    protocol    = "tcp"
+    cidr_blocks = [aws_vpc.main.cidr_block]
   }
 
   egress {
-    from_port   = 443
-    to_port     = 443
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "RDS-PostgreSQL-SG"
+  }
+}
+
+resource "aws_security_group" "debezium" {
+  name        = "debezium_sg_${random_id.bucket_suffix.hex}"
+  description = "Security group for Debezium EC2"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    description = "SSH"
+    from_port   = 22
+    to_port     = 22
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  egress {
-    from_port   = 80
-    to_port     = 80
+  ingress {
+    description = "Debezium Kafka Connect API"
+    from_port   = 8083
+    to_port     = 8083
     protocol    = "tcp"
+    cidr_blocks = [aws_vpc.main.cidr_block, "0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "Internal VPC traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = [aws_vpc.main.cidr_block]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "Debezium-SG"
   }
 }
 
@@ -239,7 +314,7 @@ resource "aws_instance" "spark_master" {
 }
 
 resource "aws_instance" "spark_worker" {
-  count                  = 3
+  count                  = 2
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.instance_type_cluster
   subnet_id              = aws_subnet.main.id
@@ -413,6 +488,193 @@ ENVEOF
 }
 
 # -----------------------------------------------------------------------------
+# RDS — PostgreSQL with Logical Replication
+# -----------------------------------------------------------------------------
+resource "aws_db_parameter_group" "postgres_logical" {
+  name        = "dvdrental-pg-logical-${random_id.bucket_suffix.hex}"
+  family      = "postgres16"
+  description = "Enable logical replication for Debezium CDC"
+
+  parameter {
+    name         = "rds.logical_replication"
+    value        = "1"
+    apply_method = "pending-reboot"
+  }
+
+  parameter {
+    name         = "max_slot_wal_keep_size"
+    value        = "10240"
+    apply_method = "immediate"
+  }
+
+  parameter {
+    name         = "wal_sender_timeout"
+    value        = "0"
+    apply_method = "immediate"
+  }
+
+  tags = {
+    Name = "dvdrental-pg-logical"
+  }
+}
+
+resource "aws_db_instance" "postgres" {
+  identifier        = "dvdrental-postgres-${random_id.bucket_suffix.hex}"
+  engine            = "postgres"
+  engine_version    = "16"
+  instance_class    = var.db_instance_class
+  allocated_storage = 20
+  storage_type      = "gp3"
+
+  db_name  = var.db_name
+  username = var.db_username
+  password = var.db_password
+
+  db_subnet_group_name   = aws_db_subnet_group.postgres.name
+  vpc_security_group_ids = [aws_security_group.rds.id]
+  parameter_group_name   = aws_db_parameter_group.postgres_logical.name
+
+  publicly_accessible     = false
+  skip_final_snapshot     = true
+  deletion_protection     = false
+  backup_retention_period = 1 # Required for Free-Tier compliance (cannot exceed 1)
+  apply_immediately       = true
+
+  tags = {
+    Name = "dvdrental-postgres"
+  }
+}
+
+# -----------------------------------------------------------------------------
+# Debezium CDC EC2 Node (Lightweight instance for Kafka Connect)
+# -----------------------------------------------------------------------------
+resource "aws_instance" "debezium" {
+  ami                    = data.aws_ami.ubuntu.id
+  instance_type          = var.instance_type_debezium
+  subnet_id              = aws_subnet.main.id
+  private_ip             = cidrhost(aws_subnet.main.cidr_block, 105)
+  vpc_security_group_ids = [aws_security_group.debezium.id]
+  iam_instance_profile   = aws_iam_instance_profile.debezium_profile.name
+
+  root_block_device {
+    volume_size           = 25
+    volume_type           = "gp3"
+    delete_on_termination = true
+  }
+
+  user_data = <<-EOF
+    #!/bin/bash
+    set -euo pipefail
+    exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+
+    echo "[*] Installing Docker, postgresql-client, jq, curl, awscli..."
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -y
+    apt-get install -y docker.io docker-compose-v2 postgresql-client jq curl awscli
+    systemctl enable --now docker
+    usermod -aG docker ubuntu
+
+    # Create helper script for REPLICA IDENTITY FULL enforcement
+    cat > /home/ubuntu/enforce_replica_identity.sh <<'SCRIPT_EOF'
+#!/bin/bash
+set -euo pipefail
+echo "[*] Waiting for PostgreSQL RDS (${aws_db_instance.postgres.address}:5432) to accept connections..."
+export PGPASSWORD="${var.db_password}"
+MAX_RETRIES=45
+COUNT=0
+until psql -h "${aws_db_instance.postgres.address}" -p 5432 -U "${var.db_username}" -d "${var.db_name}" -c '\q' >/dev/null 2>&1 || [ $COUNT -eq $MAX_RETRIES ]; do
+  echo "Waiting for RDS PostgreSQL to be ready ($COUNT/$MAX_RETRIES)..."
+  sleep 10
+  COUNT=$((COUNT+1))
+done
+
+echo "[*] Enforcing REPLICA IDENTITY FULL on transactional tables for Debezium CDC..."
+psql -h "${aws_db_instance.postgres.address}" -p 5432 -U "${var.db_username}" -d "${var.db_name}" <<'SQLEOF'
+DO $$
+DECLARE
+  t text;
+  tbls text[] := ARRAY[
+    'actor', 'address', 'category', 'city', 'country',
+    'customer', 'film', 'film_actor', 'film_category',
+    'inventory', 'language', 'payment', 'rental', 'staff', 'store'
+  ];
+BEGIN
+  FOREACH t IN ARRAY tbls LOOP
+    IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = t) THEN
+      EXECUTE 'ALTER TABLE public.' || quote_ident(t) || ' REPLICA IDENTITY FULL;';
+      RAISE NOTICE 'Configured REPLICA IDENTITY FULL on public.%', t;
+    END IF;
+  END LOOP;
+END $$;
+SQLEOF
+echo "[*] REPLICA IDENTITY FULL configured successfully."
+SCRIPT_EOF
+
+    chmod +x /home/ubuntu/enforce_replica_identity.sh
+    chown ubuntu:ubuntu /home/ubuntu/enforce_replica_identity.sh
+    /home/ubuntu/enforce_replica_identity.sh || true
+
+    echo "[*] Starting Debezium Kafka Connect container..."
+    KAFKA_BROKERS="${join(",", [for inst in aws_instance.kafka : "${inst.private_ip}:9092"])}"
+    docker run -d \
+      --name debezium-connect \
+      --network host \
+      --restart always \
+      -e GROUP_ID=debezium-cluster \
+      -e CONFIG_STORAGE_TOPIC=debezium_configs \
+      -e OFFSET_STORAGE_TOPIC=debezium_offsets \
+      -e STATUS_STORAGE_TOPIC=debezium_statuses \
+      -e CONFIG_STORAGE_REPLICATION_FACTOR=1 \
+      -e OFFSET_STORAGE_REPLICATION_FACTOR=1 \
+      -e STATUS_STORAGE_REPLICATION_FACTOR=1 \
+      -e BOOTSTRAP_SERVERS="$KAFKA_BROKERS" \
+      -e KEY_CONVERTER=org.apache.kafka.connect.json.JsonConverter \
+      -e VALUE_CONVERTER=org.apache.kafka.connect.json.JsonConverter \
+      -e KEY_CONVERTER_SCHEMAS_ENABLE=false \
+      -e VALUE_CONVERTER_SCHEMAS_ENABLE=false \
+      -e REST_PORT=8083 \
+      debezium/connect:2.5
+
+    echo "[*] Waiting for Debezium Kafka Connect REST API on port 8083..."
+    until curl -s http://127.0.0.1:8083/connectors >/dev/null 2>&1; do
+      sleep 5
+    done
+
+    echo "[*] Preparing Debezium connector registration payload..."
+    cat > /home/ubuntu/register-debezium.json <<'CONEOF'
+{
+  "name": "dvdrental-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "tasks.max": "1",
+    "plugin.name": "pgoutput",
+    "database.hostname": "${aws_db_instance.postgres.address}",
+    "database.port": "5432",
+    "database.user": "${var.db_username}",
+    "database.password": "${var.db_password}",
+    "database.dbname": "${var.db_name}",
+    "database.server.name": "dvdrental",
+    "topic.prefix": "cdc.public",
+    "schema.include.list": "public",
+    "table.include.list": "public.actor,public.address,public.category,public.city,public.country,public.customer,public.film,public.film_actor,public.film_category,public.inventory,public.language,public.payment,public.rental,public.staff,public.store",
+    "tombstones.on.delete": "false",
+    "decimal.handling.mode": "double"
+  }
+}
+CONEOF
+    chown ubuntu:ubuntu /home/ubuntu/register-debezium.json
+
+    curl -i -X POST -H "Accept:application/json" -H "Content-Type:application/json" \
+      http://127.0.0.1:8083/connectors/ \
+      -d @/home/ubuntu/register-debezium.json || true
+  EOF
+
+  tags = {
+    Name = "Debezium-Node"
+  }
+}
+
+# -----------------------------------------------------------------------------
 # Outputs
 # -----------------------------------------------------------------------------
 output "kafka_bootstrap_servers" {
@@ -445,4 +707,28 @@ output "airflow_web_ui" {
 
 output "s3_bucket_name" {
   value = data.aws_s3_bucket.hudi_data.bucket
+}
+
+output "postgres_endpoint" {
+  value = aws_db_instance.postgres.endpoint
+}
+
+output "postgres_address" {
+  value = aws_db_instance.postgres.address
+}
+
+output "postgres_port" {
+  value = aws_db_instance.postgres.port
+}
+
+output "debezium_private_ip" {
+  value = aws_instance.debezium.private_ip
+}
+
+output "debezium_public_ip" {
+  value = aws_instance.debezium.public_ip
+}
+
+output "debezium_connect_api" {
+  value = "http://${aws_instance.debezium.public_ip}:8083"
 }
