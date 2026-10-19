@@ -115,11 +115,11 @@ resource "aws_security_group" "rds" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    description = "PostgreSQL port from VPC"
+    description = "PostgreSQL port from VPC and Public"
     from_port   = 5432
     to_port     = 5432
     protocol    = "tcp"
-    cidr_blocks = [aws_vpc.main.cidr_block]
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
@@ -599,7 +599,7 @@ resource "aws_db_instance" "postgres" {
   vpc_security_group_ids = [aws_security_group.rds.id]
   parameter_group_name   = aws_db_parameter_group.postgres_logical.name
 
-  publicly_accessible     = false
+  publicly_accessible     = true
   skip_final_snapshot     = true
   deletion_protection     = false
   backup_retention_period = 1 # Required for Free-Tier compliance (cannot exceed 1)
