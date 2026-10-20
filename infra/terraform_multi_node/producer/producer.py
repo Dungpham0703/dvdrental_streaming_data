@@ -61,17 +61,30 @@ def load_config() -> dict:
     reraise=True,
 )
 def get_producer(bootstrap_servers: str) -> KafkaProducer:
-    logger.info("Attempting to connect to Kafka Broker...")
-    return KafkaProducer(
-        bootstrap_servers=bootstrap_servers.split(","),
-        value_serializer=lambda v: json.dumps(v).encode("utf-8"),
-        key_serializer=lambda k: str(k).encode("utf-8"),
-        linger_ms=50,
-        batch_size=131072,
-        compression_type="lz4",
-        acks="all",
-        retries=5,
+    batch_size = int(os.environ.get("KAFKA_BATCH_SIZE", "524288"))  # 512 KB
+    linger_ms = int(os.environ.get("KAFKA_LINGER_MS", "10"))
+    buffer_memory = int(os.environ.get("KAFKA_BUFFER_MEMORY", "67108864"))  # 64 MB
+    acks_str = os.environ.get("KAFKA_ACKS", "1")
+    acks_val = acks_str if acks_str in ("all", "0") else int(acks_str)
+    compression = os.environ.get("KAFKA_COMPRESSION", "lz4")
+    max_in_flight = int(os.environ.get("KAFKA_MAX_IN_FLIGHT", "5"))
+
+    logger.info(
+        f"Connecting to Kafka (batch={batch_size}B, linger={linger_ms}ms, acks={acks_str}, comp={compression})..."
     )
+    producer_kwargs = {
+        "bootstrap_servers": bootstrap_servers.split(","),
+        "value_serializer": lambda v: json.dumps(v).encode("utf-8"),
+        "key_serializer": lambda k: str(k).encode("utf-8"),
+        "linger_ms": linger_ms,
+        "batch_size": batch_size,
+        "buffer_memory": buffer_memory,
+        "compression_type": compression,
+        "acks": acks_val,
+        "retries": 5,
+        "max_in_flight_requests_per_connection": max_in_flight,
+    }
+    return KafkaProducer(**producer_kwargs)
 
 
 def generate_mock_payload(
@@ -257,6 +270,64 @@ def generate_mock_payload(
             }
         )
 
+    # --- ENRICH WITH DEBEZIUM METADATA ENVELOPE (~1.5 - 1.8 KB per record) ---
+    audit_trail = [
+        {"event": "AUTH_SUCCESS", "timestamp": ts_ms - 250, "provider": "OAUTH2_KEYCLOAK"},
+        {"event": "INVENTORY_LOOKUP_CACHE_HIT", "timestamp": ts_ms - 180, "store_id": (current_id % 2) + 1},
+        {"event": "PAYMENT_GATEWAY_CALLBACK", "timestamp": ts_ms - 90, "gw_ref": f"STRIPE-TXN-{current_id}", "status": "APPROVED", "currency": "USD"},
+        {"event": "CDC_CAPTURE_COMMITTED", "timestamp": ts_ms, "wal_segment": "000000010000000A000000F2"}
+    ]
+
+    source_info = {
+        "version": "2.4.0.Final",
+        "connector": "postgresql",
+        "name": "dvdrental_cdc",
+        "ts_ms": ts_ms,
+        "snapshot": "false",
+        "db": "dvdrental",
+        "sequence": f"[null,\"{10000000000 + current_id * 512}\"]",
+        "schema": "public",
+        "table": table,
+        "txId": current_id * 100 + random.randint(1, 99),
+        "lsn": 10000000000 + current_id * 512,
+        "xmin": None,
+    }
+
+    transaction_info = {
+        "id": f"tx-dvdrental-{current_id}-{ts_ms}",
+        "total_order": current_id,
+        "data_collection_order": 1,
+    }
+
+    metadata_info = {
+        "client_ip": "172.31.16.120",
+        "trace_id": f"0af7651916cd43dd{ts_ms}{random.randint(1000, 9999)}",
+        "span_id": f"b7ad6b{random.randint(100000, 999999)}",
+        "datacenter": "ap-southeast-2a",
+        "cluster_node": f"kafka-node-{(current_id % 3) + 1}",
+        "event_schema_version": "v2.4-full-envelope",
+        "session_context": {
+            "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "headers": {
+                "x-forwarded-for": "103.149.28.12",
+                "x-request-id": f"req-dvdrental-{current_id}-{ts_ms}",
+                "x-correlation-id": f"corr-{current_id}-{random.randint(1000, 9999)}",
+                "accept-language": "en-US,en;q=0.9,vi;q=0.8",
+            },
+            "audit_trail": audit_trail,
+        },
+        "payload_signature": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" * 2,
+        "extended_notes": "Production-grade stress testing transaction with high-precision timestamp and full Debezium audit envelope.",
+    }
+
+    row_snapshot = dict(base_payload)
+
+    base_payload["source"] = source_info
+    base_payload["transaction"] = transaction_info
+    base_payload["metadata"] = metadata_info
+    base_payload["before"] = row_snapshot if op in ("u", "d") else None
+    base_payload["after"] = row_snapshot if op in ("c", "u") else None
+
     return base_payload
 
 
@@ -265,37 +336,19 @@ def pump_worker(
     worker_id: int,
     bootstrap_servers: str,
     topic_prefix: str,
-    messages_per_worker: int,
+    target_tables: list,
+    rounds_per_worker: int,
     stop_event: multiprocessing.Event,
 ):
     producer = get_producer(bootstrap_servers)
-
-    tables = [
-        "actor",
-        "address",
-        "category",
-        "city",
-        "country",
-        "customer",
-        "film",
-        "film_actor",
-        "film_category",
-        "inventory",
-        "language",
-        "payment",
-        "rental",
-        "staff",
-        "store",
-    ]
-
-    topics = {t: f"{topic_prefix}.{t}" for t in tables}
+    topics = {t: f"{topic_prefix}.{t}" for t in target_tables}
 
     op_insert_pct = int(os.environ.get("OP_INSERT_PCT", "70"))
     op_update_pct = int(os.environ.get("OP_UPDATE_PCT", "20"))
     op_delete_pct = int(os.environ.get("OP_DELETE_PCT", "10"))
-    log_interval = int(os.environ.get("LOG_INTERVAL_ROUNDS", "1000"))
+    log_interval = int(os.environ.get("LOG_INTERVAL_ROUNDS", "5000"))
 
-    start_id = worker_id * messages_per_worker + 1
+    start_id = worker_id * rounds_per_worker + 1
     current_max_id = start_id
     count = 0
     start_time = time.time()
@@ -303,20 +356,20 @@ def pump_worker(
     c_count = 0
     u_count = 0
     d_count = 0
+    msgs_per_round = len(target_tables)
 
     logger.info(
-        f"Started Worker-{worker_id}: Target {messages_per_worker:,} rounds | "
-        f"Distribution: C={op_insert_pct}%, U={op_update_pct}%, D={op_delete_pct}% (REPLICA IDENTITY FULL)"
+        f"Started Worker-{worker_id}: Target {rounds_per_worker:,} rounds ({rounds_per_worker * msgs_per_round:,} msgs) | "
+        f"Tables: {target_tables} | C={op_insert_pct}%, U={op_update_pct}%, D={op_delete_pct}% (REPLICA IDENTITY FULL)"
     )
 
     try:
-        while count < messages_per_worker and not stop_event.is_set():
+        while count < rounds_per_worker and not stop_event.is_set():
             now_sec = time.time()
             ts_ms = int(now_sec * 1000)
             ts_micros_str = str(int(now_sec * 1000000))
             create_date_str = str(int(now_sec / 86400))
 
-            # Initial seed rounds: 100% INSERT to create baseline records
             if (current_max_id - start_id) < 50:
                 op = "c"
             else:
@@ -339,7 +392,7 @@ def pump_worker(
                 current_id = random.randint(start_id, current_max_id - 1)
                 d_count += 1
 
-            for table in tables:
+            for table in target_tables:
                 payload = generate_mock_payload(
                     table=table,
                     current_id=current_id,
@@ -364,22 +417,21 @@ def pump_worker(
             count += 1
 
             if count % log_interval == 0:
-                producer.flush()
                 now = time.time()
                 elapsed = now - start_time
-                rate = (count * 15) / elapsed if elapsed > 0 else 0
-                pct = (count / messages_per_worker) * 100
-                remaining_rounds = messages_per_worker - count
-                eta_s = (remaining_rounds * 15) / rate if rate > 0 else 0
+                total_msgs_sent = count * msgs_per_round
+                rate = total_msgs_sent / elapsed if elapsed > 0 else 0
+                mb_s = (rate * 1.8) / 1024  # ~1.8 KB per payload
+                pct = (count / rounds_per_worker) * 100
+                remaining_msgs = (rounds_per_worker - count) * msgs_per_round
+                eta_s = remaining_msgs / rate if rate > 0 else 0
                 eta_m = int(eta_s // 60)
                 eta_rem_s = int(eta_s % 60)
 
                 logger.info(
-                    f"[{pct:5.1f}%] {count:,}/{messages_per_worker:,} rounds | "
-                    f"{rate:,.0f} msg/s | Elapsed: {elapsed:.1f}s | ETA: {eta_m}m{eta_rem_s}s | "
-                    f"Ops: C:{c_count:,} ({(c_count/count)*100:.1f}%) "
-                    f"U:{u_count:,} ({(u_count/count)*100:.1f}%) "
-                    f"D:{d_count:,} ({(d_count/count)*100:.1f}%)"
+                    f"[{pct:5.1f}%] {count:,}/{rounds_per_worker:,} rounds | "
+                    f"{rate:,.0f} msg/s ({mb_s:.1f} MB/s) | Elapsed: {elapsed:.1f}s | ETA: {eta_m}m{eta_rem_s}s | "
+                    f"Ops: C:{c_count:,} U:{u_count:,} D:{d_count:,}"
                 )
 
     except KeyboardInterrupt:
@@ -388,8 +440,12 @@ def pump_worker(
         producer.flush()
         producer.close()
         elapsed = time.time() - start_time
+        total_msgs_sent = count * msgs_per_round
+        final_rate = total_msgs_sent / elapsed if elapsed > 0 else 0
+        final_mb_s = (final_rate * 1.8) / 1024
         logger.info(
-            f"Worker-{worker_id} Finished: {count * 15:,} msgs in {elapsed:.1f}s | "
+            f"Worker-{worker_id} Finished: {total_msgs_sent:,} msgs in {elapsed:.1f}s "
+            f"({final_rate:,.0f} msg/s, {final_mb_s:.1f} MB/s) | "
             f"Final Ops: C={c_count:,}, U={u_count:,}, D={d_count:,}"
         )
 
@@ -397,23 +453,60 @@ def pump_worker(
 def main():
     config = load_config()
 
-    TARGET_ROUNDS = int(os.environ.get("TARGET_ROUNDS", "1_000_000"))
-    WORKERS = int(os.environ.get("WORKERS", "4"))
+    all_15_tables = [
+        "actor",
+        "address",
+        "category",
+        "city",
+        "country",
+        "customer",
+        "film",
+        "film_actor",
+        "film_category",
+        "inventory",
+        "language",
+        "payment",
+        "rental",
+        "staff",
+        "store",
+    ]
+
+    table_focus = os.environ.get("TABLE_FOCUS", "rental_payment").lower()
+    if table_focus in ("rental_payment", "transactions", "tx"):
+        target_tables = ["rental", "payment"]
+    elif table_focus in ("rental", "rental_only"):
+        target_tables = ["rental"]
+    elif table_focus in ("payment", "payment_only"):
+        target_tables = ["payment"]
+    else:
+        target_tables = all_15_tables
+
+    WORKERS = int(os.environ.get("WORKERS", "8"))
+    TARGET_MESSAGES = int(os.environ.get("TARGET_MESSAGES", "20_000_000"))
+    TARGET_ROUNDS = int(os.environ.get("TARGET_ROUNDS", "0"))
+
+    if TARGET_ROUNDS <= 0:
+        TARGET_ROUNDS = TARGET_MESSAGES // len(target_tables)
+
     OP_INSERT_PCT = int(os.environ.get("OP_INSERT_PCT", "70"))
     OP_UPDATE_PCT = int(os.environ.get("OP_UPDATE_PCT", "20"))
     OP_DELETE_PCT = int(os.environ.get("OP_DELETE_PCT", "10"))
 
-    logger.info("=" * 65)
-    logger.info("DVDRENTAL KAFKA PUMP - 15 TABLES (CDC REPLICA IDENTITY FULL)")
-    logger.info(f"Broker:         {config['bootstrap_servers']}")
-    logger.info(f"Topic Prefix:   {config['topic_prefix']}")
-    logger.info(f"Target:         {TARGET_ROUNDS:,} rounds ({TARGET_ROUNDS * 15:,} messages)")
-    logger.info(f"Workers:        {WORKERS}")
-    logger.info(f"Ops Mix:        Insert: {OP_INSERT_PCT}% | Update: {OP_UPDATE_PCT}% | Delete: {OP_DELETE_PCT}%")
-    logger.info("=" * 65)
+    total_msgs_planned = TARGET_ROUNDS * len(target_tables)
+    est_total_mb = (total_msgs_planned * 1.8) / 1024
+
+    logger.info("=" * 72)
+    logger.info("DVDRENTAL KAFKA STRESS PUMP — HIGH THROUGHPUT DEBEZIUM ENVELOPE")
+    logger.info(f"Broker:             {config['bootstrap_servers']}")
+    logger.info(f"Topic Prefix:       {config['topic_prefix']}")
+    logger.info(f"Table Focus Mode:   {table_focus} -> {target_tables}")
+    logger.info(f"Target Plan:        {TARGET_ROUNDS:,} rounds ({total_msgs_planned:,} msgs, ~{est_total_mb:,.1f} MB)")
+    logger.info(f"Workers:            {WORKERS} parallel processes")
+    logger.info(f"Ops Mix:            Insert: {OP_INSERT_PCT}% | Update: {OP_UPDATE_PCT}% | Delete: {OP_DELETE_PCT}%")
+    logger.info("=" * 72)
 
     stop_event = multiprocessing.Event()
-    msgs_per_worker = TARGET_ROUNDS // WORKERS
+    rounds_per_worker = TARGET_ROUNDS // WORKERS
 
     workers = []
     for i in range(WORKERS):
@@ -423,7 +516,8 @@ def main():
                 i,
                 config["bootstrap_servers"],
                 config["topic_prefix"],
-                msgs_per_worker,
+                target_tables,
+                rounds_per_worker,
                 stop_event,
             ),
         )
@@ -439,7 +533,7 @@ def main():
         for p in workers:
             p.join()
 
-    logger.info("All workers completed successfully!")
+    logger.info("All stress pump workers completed successfully!")
 
 
 if __name__ == "__main__":
