@@ -22,10 +22,7 @@ with raw_payment as (
     select * from {{ source('raw', 'payment') }}
     {% if is_incremental() %}
     where {{ debezium_ts_milies('__ts_ms') }} >= (
-        select date_format(
-            date_add('hour', -{{ var('cdc_lookback_hours', 1) }}, date_parse(max(cdc_capture_at), '%Y-%m-%d %H:%i:%s.%f')),
-            '%Y-%m-%d %H:%i:%s.%f'
-        )
+        select date_add('hour', -{{ var('cdc_lookback_hours', 1) }}, max(cdc_capture_at))
         from {{ this }}
     )
     {% endif %}

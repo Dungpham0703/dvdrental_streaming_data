@@ -23,10 +23,7 @@ with raw_rental as (
     select * from {{ source('raw', 'rental') }}
     {% if is_incremental() %}
     where {{ debezium_ts_milies('__ts_ms') }} >= (
-        select date_format(
-            date_add('hour', -{{ var('cdc_lookback_hours', 1) }}, date_parse(max(cdc_capture_at), '%Y-%m-%d %H:%i:%s.%f')),
-            '%Y-%m-%d %H:%i:%s.%f'
-        )
+        select date_add('hour', -{{ var('cdc_lookback_hours', 1) }}, max(cdc_capture_at))
         from {{ this }}
     )
     {% endif %}
@@ -56,7 +53,7 @@ filtered_rental as (
     where is_deleted = true
        or (
            is_deleted = false
-           and (rental_date is null or rental_date <= {{ current_timestamp_iso() }})
+           and (rental_date is null or rental_date <= current_timestamp)
            and (return_date is null or return_date >= rental_date)
        )
 ),

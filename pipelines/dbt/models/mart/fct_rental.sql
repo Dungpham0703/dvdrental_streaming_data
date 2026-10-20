@@ -27,10 +27,7 @@ with new_rentals as (
     select * from {{ ref('stg_rental') }}
     {% if is_incremental() %}
     where cdc_capture_at >= (
-        select date_format(
-            date_add('hour', -{{ var('cdc_lookback_hours', 1) }}, date_parse(max(cdc_capture_at), '%Y-%m-%d %H:%i:%s.%f')),
-            '%Y-%m-%d %H:%i:%s.%f'
-        )
+        select date_add('hour', -{{ var('cdc_lookback_hours', 1) }}, max(cdc_capture_at))
         from {{ this }}
     )
     {% endif %}
@@ -70,9 +67,9 @@ customers as (
         case
             when lag(valid_to) over (partition by customer_id order by valid_from) is null
             then timestamp '1970-01-01 00:00:00'
-            else cast(valid_from as timestamp)
+            else cast(valid_from as timestamp(3))
         end as effective_from,
-        coalesce(cast(valid_to as timestamp), timestamp '9999-12-31 23:59:59') as effective_to
+        coalesce(cast(valid_to as timestamp(3)), timestamp '9999-12-31 23:59:59') as effective_to
     from {{ ref('dim_customer') }}
 ),
 
@@ -80,7 +77,7 @@ final as (
     select
         r.rental_id,
         r.rental_date,
-        cast(substr(r.rental_date, 1, 10) as date) as rental_date_day,
+        cast(r.rental_date as date) as rental_date_day,
         r.return_date,
         coalesce(c.customer_key, '-1') as customer_key,
         r.customer_id,
@@ -89,7 +86,7 @@ final as (
         r.staff_id,
         case
             when r.return_date is not null
-            then date_diff('day', cast({{ parse_iso_timestamp('r.rental_date') }} as date), cast({{ parse_iso_timestamp('r.return_date') }} as date))
+            then date_diff('day', cast(r.rental_date as date), cast(r.return_date as date))
             else null
         end as rental_duration_days,
         r.cdc_capture_at,
@@ -101,8 +98,8 @@ final as (
         on r.customer_id = c.customer_id
        and (
            r.rental_date is not null
-           and date_parse(r.rental_date, '%Y-%m-%d %H:%i:%s.%f') >= c.effective_from
-           and date_parse(r.rental_date, '%Y-%m-%d %H:%i:%s.%f') < c.effective_to
+           and r.rental_date >= c.effective_from
+           and r.rental_date < c.effective_to
        )
 )
 

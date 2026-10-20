@@ -27,10 +27,7 @@ with payments as (
     select * from {{ ref('stg_payment') }}
     {% if is_incremental() %}
     where cdc_capture_at >= (
-        select date_format(
-            date_add('hour', -{{ var('cdc_lookback_hours', 1) }}, date_parse(max(cdc_capture_at), '%Y-%m-%d %H:%i:%s.%f')),
-            '%Y-%m-%d %H:%i:%s.%f'
-        )
+        select date_add('hour', -{{ var('cdc_lookback_hours', 1) }}, max(cdc_capture_at))
         from {{ this }}
     )
     {% endif %}
@@ -51,9 +48,9 @@ customers as (
         case
             when lag(valid_to) over (partition by customer_id order by valid_from) is null
             then timestamp '1970-01-01 00:00:00'
-            else cast(valid_from as timestamp)
+            else cast(valid_from as timestamp(3))
         end as effective_from,
-        coalesce(cast(valid_to as timestamp), timestamp '9999-12-31 23:59:59') as effective_to
+        coalesce(cast(valid_to as timestamp(3)), timestamp '9999-12-31 23:59:59') as effective_to
     from {{ ref('dim_customer') }}
 ),
 
@@ -68,7 +65,7 @@ final as (
         i.store_id,
         p.amount,
         p.payment_date,
-        cast(substr(p.payment_date, 1, 10) as date) as payment_date_day,
+        cast(p.payment_date as date) as payment_date_day,
         p.cdc_capture_at,
         p.is_deleted
     from payments p
@@ -80,8 +77,8 @@ final as (
         on p.customer_id = c.customer_id
        and (
            p.payment_date is not null
-           and date_parse(p.payment_date, '%Y-%m-%d %H:%i:%s.%f') >= c.effective_from
-           and date_parse(p.payment_date, '%Y-%m-%d %H:%i:%s.%f') < c.effective_to
+           and p.payment_date >= c.effective_from
+           and p.payment_date < c.effective_to
        )
 )
 
