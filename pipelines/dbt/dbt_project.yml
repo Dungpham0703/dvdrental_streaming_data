@@ -39,4 +39,5 @@ snapshots:
 
 tests:
   +store_failures: true
+  +table_type: iceberg
   +schema: audit

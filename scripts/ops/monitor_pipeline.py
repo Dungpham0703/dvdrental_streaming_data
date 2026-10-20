@@ -259,7 +259,7 @@ def render_dashboard(
     spark_ip = get_public_ip_by_tag("Spark-Master") or "<SPARK_MASTER_IP>"
     print("\n[3] OBSERVABILITY CHEAT SHEET")
     print(f"  • Spark Master Web UI:     http://{spark_ip}:8080")
-    print(f"  • Spark Streamer App UI:   http://{spark_ip}:4040")
+    print(f"  • Spark Streamer App UI:   http://{spark_ip}:8090")
     print("  • Producer Progress:       tmux a -t producer (on Producer node)")
     print("=" * 72)
 

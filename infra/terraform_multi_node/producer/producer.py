@@ -63,7 +63,6 @@ def load_config() -> dict:
 def get_producer(bootstrap_servers: str) -> KafkaProducer:
     batch_size = int(os.environ.get("KAFKA_BATCH_SIZE", "524288"))  # 512 KB
     linger_ms = int(os.environ.get("KAFKA_LINGER_MS", "10"))
-    buffer_memory = int(os.environ.get("KAFKA_BUFFER_MEMORY", "67108864"))  # 64 MB
     acks_str = os.environ.get("KAFKA_ACKS", "1")
     acks_val = acks_str if acks_str in ("all", "0") else int(acks_str)
     compression = os.environ.get("KAFKA_COMPRESSION", "lz4")
@@ -78,7 +77,6 @@ def get_producer(bootstrap_servers: str) -> KafkaProducer:
         "key_serializer": lambda k: str(k).encode("utf-8"),
         "linger_ms": linger_ms,
         "batch_size": batch_size,
-        "buffer_memory": buffer_memory,
         "compression_type": compression,
         "acks": acks_val,
         "retries": 5,

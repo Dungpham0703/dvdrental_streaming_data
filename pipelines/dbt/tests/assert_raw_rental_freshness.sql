@@ -13,8 +13,8 @@ with
     )
 
 select
-    date_format(last_cdc_timestamp, '%Y-%m-%d %H:%i:%s') as last_cdc_timestamp,
-    date_format(current_timestamp, '%Y-%m-%d %H:%i:%s') as checked_at,
+    last_cdc_timestamp,
+    current_timestamp as checked_at,
     date_diff('minute', last_cdc_timestamp, current_timestamp) as lag_minutes
 from latest_event
 where

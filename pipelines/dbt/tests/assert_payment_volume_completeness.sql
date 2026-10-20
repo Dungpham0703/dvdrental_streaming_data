@@ -4,14 +4,11 @@
 with
     hourly_stats as (
         select
-            date_trunc(
-                'hour', date_parse(cdc_capture_at, '%Y-%m-%d %H:%i:%s.%f')
-            ) as capture_hour,
+            date_trunc('hour', cdc_capture_at) as capture_hour,
             count(distinct payment_id) as record_count
         from {{ ref("stg_payment") }}
         where
-            date_parse(cdc_capture_at, '%Y-%m-%d %H:%i:%s.%f')
-            >= date_add('day', -8, current_timestamp)
+            cdc_capture_at >= date_add('day', -8, current_timestamp)
         group by 1
     ),
 

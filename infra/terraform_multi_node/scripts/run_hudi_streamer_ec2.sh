@@ -107,10 +107,8 @@ while true; do
         --source-class org.apache.hudi.utilities.sources.JsonKafkaSource \
         --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider \
         --table-type MERGE_ON_READ \
-        --source-ordering-field __ts_ms \
-        --continuous \
-        --min-sync-interval-seconds 10
+        --source-ordering-field __ts_ms
 
-    echo "[!] Hudi Streamer exited or crashed. Auto-restarting in 5s..."
+    echo "[*] Hudi MultiTableStreamer cycle finished. Next micro-batch sync in 5s..."
     sleep 5
 done

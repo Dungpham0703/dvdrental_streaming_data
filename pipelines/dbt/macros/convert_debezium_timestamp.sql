@@ -1,9 +1,9 @@
 {% macro debezium_ts_micros(column_name) %}
-    cast(from_unixtime(cast({{ column_name }} as double) / 1000000.0) as timestamp(3))
+    cast(from_unixtime(cast({{ column_name }} as double) / 1000000.0) as timestamp(6))
 {% endmacro %}
 
 {% macro debezium_ts_milies(column_name)  %}
-    cast(from_unixtime(cast({{ column_name }} as double) / 1000.0) as timestamp(3))
+    cast(from_unixtime(cast({{ column_name }} as double) / 1000.0) as timestamp(6))
 {% endmacro %}
 
 {% macro debezium_date_days(column_name) %}
@@ -16,13 +16,13 @@
 {% endmacro %}
 
 {% macro current_timestamp_iso() %}
-    cast(current_timestamp as timestamp(3))
+    cast(current_timestamp as timestamp(6))
 {% endmacro %}
 
 {% macro parse_iso_timestamp(column_name) %}
-    cast({{ column_name }} as timestamp(3))
+    cast({{ column_name }} as timestamp(6))
 {% endmacro %}
 
 {% macro snapshot_get_time() %}
-    cast(current_timestamp as timestamp(3))
+    cast(current_timestamp as timestamp(6))
 {% endmacro %}
