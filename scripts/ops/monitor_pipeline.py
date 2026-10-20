@@ -94,7 +94,7 @@ def get_kafka_metrics(bootstrap_servers: str, topic_prefix: str):
         return {}, 0, str(e)
 
 
-def get_s3_metrics(bucket_name: str, prefix: str = "bronze/default/"):
+def get_s3_metrics(bucket_name: str, prefix: str = "default/"):
     try:
         s3 = boto3.client("s3")
         paginator = s3.get_paginator("list_objects_v2")
@@ -162,9 +162,7 @@ def render_dashboard(
 
     print("\n[2] S3 BRONZE LAKEHOUSE (HUDI STORAGE)")
     if s3_bucket:
-        print(
-            f"  Bucket: {s3_bucket} (Prefix: {s3_metrics.get('prefix', 'bronze/default/')})"
-        )
+        print(f"  Bucket: {s3_bucket} (Prefix: {s3_metrics.get('prefix', 'default/')})")
         if s3_metrics.get("error"):
             print(f"  ⚠️  S3 Error: {s3_metrics['error']}")
         else:
