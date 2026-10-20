@@ -85,6 +85,7 @@ docker exec spark-master bash -c "mkdir -p /opt/bitnami/spark/src/test/resources
 docker exec spark-master bash -c "touch /opt/bitnami/spark/src/test/resources/streamer-config/dfs-source.properties"
 
 while true; do
+    echo "[*] Submitting Hudi MultiTableStreamer in CONTINUOUS mode..."
     docker exec spark-master spark-submit \
         --class org.apache.hudi.utilities.streamer.HoodieMultiTableStreamer \
         --master "spark://${SPARK_MASTER_IP}:7077" \
@@ -106,8 +107,10 @@ while true; do
         --source-class org.apache.hudi.utilities.sources.JsonKafkaSource \
         --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider \
         --table-type MERGE_ON_READ \
-        --source-ordering-field __ts_ms
+        --source-ordering-field __ts_ms \
+        --continuous \
+        --min-sync-interval-seconds 10
 
-    echo "[*] One round completed. Sleeping 60s before next round..."
-    sleep 60
+    echo "[!] Hudi Streamer exited or crashed. Auto-restarting in 5s..."
+    sleep 5
 done
