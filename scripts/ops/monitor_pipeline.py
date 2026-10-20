@@ -30,6 +30,64 @@ def get_aws_secret(secret_name: str, region_name: str = "ap-southeast-2") -> dic
         return {}
 
 
+def get_public_ip_by_tag(name_tag: str, region_name: str = "ap-southeast-2") -> str:
+    try:
+        ec2 = boto3.client("ec2", region_name=region_name)
+        res = ec2.describe_instances(
+            Filters=[
+                {"Name": "tag:Name", "Values": [f"*{name_tag}*"]},
+                {"Name": "instance-state-name", "Values": ["running"]},
+            ]
+        )
+        for r in res.get("Reservations", []):
+            for inst in r.get("Instances", []):
+                pub_ip = inst.get("PublicIpAddress")
+                if pub_ip:
+                    return pub_ip
+    except Exception:
+        pass
+    return ""
+
+
+def get_kafka_metrics_via_ssh(producer_ip: str, topic_prefix: str):
+    import subprocess
+
+    cmd = [
+        "ssh",
+        "-o",
+        "StrictHostKeyChecking=no",
+        "-o",
+        "ConnectTimeout=5",
+        f"ubuntu@{producer_ip}",
+        "python3 -c \"import json; from monitor_pipeline import get_kafka_metrics, get_aws_secret; sec = get_aws_secret('dvdrental/kafka_bootstrap_servers'); res, total, err = get_kafka_metrics(sec.get('bootstrap_servers'), sec.get('topic_prefix')); print('---JSON_START---'); print(json.dumps({'results': res, 'total': total, 'err': err}))\"",
+    ]
+    try:
+        out = subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL)
+        json_str = out.split("---JSON_START---")[-1].strip()
+        data = json.loads(json_str)
+        return data.get("results", {}), data.get("total", 0), data.get("err")
+    except Exception as e:
+        return {}, 0, f"SSH proxy error: {e}"
+
+
+def check_broker_reachable(bootstrap_servers: str, timeout: float = 0.5) -> bool:
+    import socket
+
+    if not bootstrap_servers:
+        return False
+    first_broker = bootstrap_servers.split(",")[0].strip()
+    if ":" in first_broker:
+        host, port_str = first_broker.split(":", 1)
+        port = int(port_str)
+    else:
+        host, port = first_broker, 9092
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
 def get_kafka_metrics(bootstrap_servers: str, topic_prefix: str):
     tables = [
         "actor",
@@ -53,11 +111,25 @@ def get_kafka_metrics(bootstrap_servers: str, topic_prefix: str):
     results = {}
     total_messages = 0
 
+    if not check_broker_reachable(bootstrap_servers):
+        producer_ip = get_public_ip_by_tag("Producer")
+        if producer_ip:
+            ssh_res, ssh_total, ssh_err = get_kafka_metrics_via_ssh(
+                producer_ip, topic_prefix
+            )
+            if not ssh_err and ssh_res:
+                return ssh_res, ssh_total, None
+        return (
+            {},
+            0,
+            f"Cannot reach Kafka brokers at {bootstrap_servers} (Private VPC) and SSH fallback failed.",
+        )
+
     try:
         consumer = KafkaConsumer(
             bootstrap_servers=bootstrap_servers.split(","),
-            request_timeout_ms=10000,
-            consumer_timeout_ms=5000,
+            request_timeout_ms=5000,
+            consumer_timeout_ms=3000,
         )
 
         cluster_topics = consumer.topics()
@@ -90,8 +162,15 @@ def get_kafka_metrics(bootstrap_servers: str, topic_prefix: str):
 
         consumer.close()
         return results, total_messages, None
-    except Exception as e:
-        return {}, 0, str(e)
+    except Exception as direct_err:
+        producer_ip = get_public_ip_by_tag("Producer")
+        if producer_ip:
+            ssh_res, ssh_total, ssh_err = get_kafka_metrics_via_ssh(
+                producer_ip, topic_prefix
+            )
+            if not ssh_err and ssh_res:
+                return ssh_res, ssh_total, None
+        return {}, 0, str(direct_err)
 
 
 def get_s3_metrics(bucket_name: str, prefix: str = "default/"):
@@ -138,14 +217,14 @@ def render_dashboard(
     os.system("clear" if os.name == "posix" else "cls")
 
     print("=" * 72)
-    print(f"  🚀 DVDRENTAL STREAMING LAKEHOUSE OBSERVABILITY — {now_str}")
+    print(f"  DVDRENTAL STREAMING LAKEHOUSE OBSERVABILITY — {now_str}")
     print("=" * 72)
 
     print("\n[1] KAFKA CLUSTER STATUS")
     print(f"  Bootstrap: {bootstrap_servers}")
     print(f"  Prefix:    {topic_prefix}")
     if kafka_err:
-        print(f"  ⚠️  Kafka Error: {kafka_err}")
+        print(f"  Kafka Error: {kafka_err}")
     else:
         print(f"  Total Ingested Messages: {total_kafka_msgs:,}")
         print("  " + "-" * 66)
@@ -164,7 +243,7 @@ def render_dashboard(
     if s3_bucket:
         print(f"  Bucket: {s3_bucket} (Prefix: {s3_metrics.get('prefix', 'default/')})")
         if s3_metrics.get("error"):
-            print(f"  ⚠️  S3 Error: {s3_metrics['error']}")
+            print(f"    S3 Error: {s3_metrics['error']}")
         else:
             print(f"  Total Files:       {s3_metrics['files']:,}")
             print(
@@ -177,10 +256,11 @@ def render_dashboard(
     else:
         print("  Bucket: (Not configured or Secrets Manager unavailable)")
 
+    spark_ip = get_public_ip_by_tag("Spark-Master") or "<SPARK_MASTER_IP>"
     print("\n[3] OBSERVABILITY CHEAT SHEET")
-    print("  • Spark Master Web UI:     http://<SPARK_MASTER_IP>:8080")
-    print("  • Spark Streamer App UI:   http://<SPARK_MASTER_IP>:4040")
-    print("  • Producer Progress:       tmux a -t producer (or /var/log/user-data.log)")
+    print(f"  • Spark Master Web UI:     http://{spark_ip}:8080")
+    print(f"  • Spark Streamer App UI:   http://{spark_ip}:4040")
+    print("  • Producer Progress:       tmux a -t producer (on Producer node)")
     print("=" * 72)
 
 
