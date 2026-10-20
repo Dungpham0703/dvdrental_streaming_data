@@ -75,22 +75,33 @@ def get_producer(bootstrap_servers: str) -> KafkaProducer:
 
 
 def generate_mock_payload(
-    table: str, current_id: int, ts_ms: int, event_time: str
+    table: str,
+    current_id: int,
+    ts_ms: int,
+    event_time_micros: str,
+    create_date: str,
+    op: str = "c",
 ) -> dict:
-    """Mock a Debezium record for the given table."""
+    """Mock a Debezium record for the given table.
+
+    Under REPLICA IDENTITY FULL:
+    DELETE ('d') events contain the complete before-image with ALL table columns,
+    __op = 'd', and __deleted = 'true'.
+    """
+    is_deleted = "true" if op == "d" else "false"
     base_payload = {
-        "__op": "c",
+        "__op": op,
         "__ts_ms": ts_ms,
-        "__deleted": "false",
+        "__deleted": is_deleted,
     }
 
     if table == "actor":
         base_payload.update(
             {
                 "actor_id": current_id,
-                "first_name": "John",
+                "first_name": "John" if op != "u" else "Johnny",
                 "last_name": "Doe",
-                "last_update": event_time,
+                "last_update": event_time_micros,
             }
         )
     elif table == "address":
@@ -103,12 +114,16 @@ def generate_mock_payload(
                 "city_id": (current_id % 600) + 1,
                 "postal_code": "90210",
                 "phone": "555-1234",
-                "last_update": event_time,
+                "last_update": event_time_micros,
             }
         )
     elif table == "category":
         base_payload.update(
-            {"category_id": current_id, "name": "Action", "last_update": event_time}
+            {
+                "category_id": current_id,
+                "name": "Action",
+                "last_update": event_time_micros,
+            }
         )
     elif table == "city":
         base_payload.update(
@@ -116,12 +131,16 @@ def generate_mock_payload(
                 "city_id": current_id,
                 "city": "Los Angeles",
                 "country_id": (current_id % 109) + 1,
-                "last_update": event_time,
+                "last_update": event_time_micros,
             }
         )
     elif table == "country":
         base_payload.update(
-            {"country_id": current_id, "country": "USA", "last_update": event_time}
+            {
+                "country_id": current_id,
+                "country": "USA",
+                "last_update": event_time_micros,
+            }
         )
     elif table == "customer":
         base_payload.update(
@@ -132,10 +151,10 @@ def generate_mock_payload(
                 "last_name": "Smith",
                 "email": "jane@example.com",
                 "address_id": (current_id % 600) + 1,
-                "activebool": True,
-                "create_date": event_time,
-                "last_update": event_time,
-                "active": 1,
+                "activebool": False if op == "u" else True,
+                "create_date": create_date,
+                "last_update": event_time_micros,
+                "active": 0 if op == "u" else 1,
             }
         )
     elif table == "film":
@@ -148,11 +167,11 @@ def generate_mock_payload(
                 "language_id": 1,
                 "original_language_id": None,
                 "rental_duration": 3,
-                "rental_rate": "4.99",
+                "rental_rate": "4.99" if op != "u" else "5.99",
                 "length": 120,
                 "replacement_cost": "19.99",
                 "rating": "PG-13",
-                "last_update": event_time,
+                "last_update": event_time_micros,
                 "special_features": "{Trailers,Commentaries}",
             }
         )
@@ -161,7 +180,7 @@ def generate_mock_payload(
             {
                 "actor_id": current_id,
                 "film_id": (current_id % 1000) + 1,
-                "last_update": event_time,
+                "last_update": event_time_micros,
             }
         )
     elif table == "film_category":
@@ -169,7 +188,7 @@ def generate_mock_payload(
             {
                 "film_id": current_id,
                 "category_id": (current_id % 16) + 1,
-                "last_update": event_time,
+                "last_update": event_time_micros,
             }
         )
     elif table == "inventory":
@@ -178,12 +197,16 @@ def generate_mock_payload(
                 "inventory_id": current_id,
                 "film_id": (current_id % 1000) + 1,
                 "store_id": (current_id % 2) + 1,
-                "last_update": event_time,
+                "last_update": event_time_micros,
             }
         )
     elif table == "language":
         base_payload.update(
-            {"language_id": current_id, "name": "English", "last_update": event_time}
+            {
+                "language_id": current_id,
+                "name": "English",
+                "last_update": event_time_micros,
+            }
         )
     elif table == "payment":
         base_payload.update(
@@ -193,19 +216,19 @@ def generate_mock_payload(
                 "staff_id": (current_id % 2) + 1,
                 "rental_id": current_id,
                 "amount": str(round(random.uniform(0.99, 49.99), 2)),
-                "payment_date": event_time,
+                "payment_date": event_time_micros,
             }
         )
     elif table == "rental":
         base_payload.update(
             {
                 "rental_id": current_id,
-                "rental_date": event_time,
+                "rental_date": event_time_micros,
                 "inventory_id": (current_id % 4581) + 1,
                 "customer_id": (current_id % 599) + 1,
-                "return_date": None,
+                "return_date": event_time_micros if op == "u" else None,
                 "staff_id": (current_id % 2) + 1,
-                "last_update": event_time,
+                "last_update": event_time_micros,
             }
         )
     elif table == "staff":
@@ -220,7 +243,7 @@ def generate_mock_payload(
                 "active": True,
                 "username": "mike",
                 "password": "password",
-                "last_update": event_time,
+                "last_update": event_time_micros,
                 "picture": None,
             }
         )
@@ -230,7 +253,7 @@ def generate_mock_payload(
                 "store_id": current_id,
                 "manager_staff_id": current_id,
                 "address_id": current_id,
-                "last_update": event_time,
+                "last_update": event_time_micros,
             }
         )
 
@@ -267,22 +290,64 @@ def pump_worker(
 
     topics = {t: f"{topic_prefix}.{t}" for t in tables}
 
-    start_id = worker_id * messages_per_worker
+    op_insert_pct = int(os.environ.get("OP_INSERT_PCT", "70"))
+    op_update_pct = int(os.environ.get("OP_UPDATE_PCT", "20"))
+    op_delete_pct = int(os.environ.get("OP_DELETE_PCT", "10"))
+    log_interval = int(os.environ.get("LOG_INTERVAL_ROUNDS", "1000"))
+
+    start_id = worker_id * messages_per_worker + 1
+    current_max_id = start_id
     count = 0
     start_time = time.time()
-    logger.info(f"Started pumping {messages_per_worker:,} messages for 15 tables...")
+
+    c_count = 0
+    u_count = 0
+    d_count = 0
+
+    logger.info(
+        f"Started Worker-{worker_id}: Target {messages_per_worker:,} rounds | "
+        f"Distribution: C={op_insert_pct}%, U={op_update_pct}%, D={op_delete_pct}% (REPLICA IDENTITY FULL)"
+    )
 
     try:
         while count < messages_per_worker and not stop_event.is_set():
-            ts_ms = int(time.time() * 1000)
-            event_time = (
-                datetime.now() - timedelta(minutes=random.randint(1, 10000))
-            ).isoformat()
+            now_sec = time.time()
+            ts_ms = int(now_sec * 1000)
+            ts_micros_str = str(int(now_sec * 1000000))
+            create_date_str = str(int(now_sec / 86400))
 
-            current_id = start_id + count
+            # Initial seed rounds: 100% INSERT to create baseline records
+            if (current_max_id - start_id) < 50:
+                op = "c"
+            else:
+                roll = random.randint(1, 100)
+                if roll <= op_insert_pct:
+                    op = "c"
+                elif roll <= (op_insert_pct + op_update_pct):
+                    op = "u"
+                else:
+                    op = "d"
+
+            if op == "c":
+                current_id = current_max_id
+                current_max_id += 1
+                c_count += 1
+            elif op == "u":
+                current_id = random.randint(start_id, current_max_id - 1)
+                u_count += 1
+            else:
+                current_id = random.randint(start_id, current_max_id - 1)
+                d_count += 1
 
             for table in tables:
-                payload = generate_mock_payload(table, current_id, ts_ms, event_time)
+                payload = generate_mock_payload(
+                    table=table,
+                    current_id=current_id,
+                    ts_ms=ts_ms,
+                    event_time_micros=ts_micros_str,
+                    create_date=create_date_str,
+                    op=op,
+                )
 
                 if table == "film_actor":
                     key = f"{payload['actor_id']},{payload['film_id']}"
@@ -298,12 +363,23 @@ def pump_worker(
 
             count += 1
 
-            if count % 1000 == 0:
+            if count % log_interval == 0:
                 producer.flush()
-                elapsed = time.time() - start_time
+                now = time.time()
+                elapsed = now - start_time
                 rate = (count * 15) / elapsed if elapsed > 0 else 0
+                pct = (count / messages_per_worker) * 100
+                remaining_rounds = messages_per_worker - count
+                eta_s = (remaining_rounds * 15) / rate if rate > 0 else 0
+                eta_m = int(eta_s // 60)
+                eta_rem_s = int(eta_s % 60)
+
                 logger.info(
-                    f"{count:,} rounds | {rate:.0f} msg/s | Elapsed: {elapsed:.1f}s"
+                    f"[{pct:5.1f}%] {count:,}/{messages_per_worker:,} rounds | "
+                    f"{rate:,.0f} msg/s | Elapsed: {elapsed:.1f}s | ETA: {eta_m}m{eta_rem_s}s | "
+                    f"Ops: C:{c_count:,} ({(c_count/count)*100:.1f}%) "
+                    f"U:{u_count:,} ({(u_count/count)*100:.1f}%) "
+                    f"D:{d_count:,} ({(d_count/count)*100:.1f}%)"
                 )
 
     except KeyboardInterrupt:
@@ -312,7 +388,10 @@ def pump_worker(
         producer.flush()
         producer.close()
         elapsed = time.time() - start_time
-        logger.info(f"Done! Total {count * 15:,} messages in {elapsed:.1f}s")
+        logger.info(
+            f"Worker-{worker_id} Finished: {count * 15:,} msgs in {elapsed:.1f}s | "
+            f"Final Ops: C={c_count:,}, U={u_count:,}, D={d_count:,}"
+        )
 
 
 def main():
@@ -320,12 +399,17 @@ def main():
 
     TARGET_ROUNDS = int(os.environ.get("TARGET_ROUNDS", "1_000_000"))
     WORKERS = int(os.environ.get("WORKERS", "4"))
+    OP_INSERT_PCT = int(os.environ.get("OP_INSERT_PCT", "70"))
+    OP_UPDATE_PCT = int(os.environ.get("OP_UPDATE_PCT", "20"))
+    OP_DELETE_PCT = int(os.environ.get("OP_DELETE_PCT", "10"))
 
     logger.info("=" * 65)
-    logger.info("DVDRENTAL KAFKA PUMP - 15 TABLES")
-    logger.info(f"Broker: {config['bootstrap_servers']}")
-    logger.info(f"Target: {TARGET_ROUNDS:,} rounds per table")
-    logger.info(f"Workers: {WORKERS}")
+    logger.info("DVDRENTAL KAFKA PUMP - 15 TABLES (CDC REPLICA IDENTITY FULL)")
+    logger.info(f"Broker:         {config['bootstrap_servers']}")
+    logger.info(f"Topic Prefix:   {config['topic_prefix']}")
+    logger.info(f"Target:         {TARGET_ROUNDS:,} rounds ({TARGET_ROUNDS * 15:,} messages)")
+    logger.info(f"Workers:        {WORKERS}")
+    logger.info(f"Ops Mix:        Insert: {OP_INSERT_PCT}% | Update: {OP_UPDATE_PCT}% | Delete: {OP_DELETE_PCT}%")
     logger.info("=" * 65)
 
     stop_event = multiprocessing.Event()
@@ -355,7 +439,7 @@ def main():
         for p in workers:
             p.join()
 
-    logger.info("All done!")
+    logger.info("All workers completed successfully!")
 
 
 if __name__ == "__main__":

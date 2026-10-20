@@ -41,3 +41,9 @@ variable "db_instance_class" {
   type        = string
   default     = "db.t3.micro"
 }
+
+variable "enable_postgres_and_debezium" {
+  description = "Flag to enable/disable PostgreSQL RDS and Debezium Kafka Connect (default false for direct-to-kafka testing)"
+  type        = bool
+  default     = false
+}

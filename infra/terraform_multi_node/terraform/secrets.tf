@@ -51,22 +51,24 @@ resource "aws_secretsmanager_secret_version" "airflow_config" {
   })
 }
 
-# Secret 4: RDS PostgreSQL Connection Info
+# Secret 4: RDS PostgreSQL Connection Info (conditional)
 resource "aws_secretsmanager_secret" "rds_postgres" {
+  count                   = var.enable_postgres_and_debezium ? 1 : 0
   name                    = "dvdrental/rds_postgres"
   description             = "PostgreSQL RDS connection details and credentials"
   recovery_window_in_days = 0
 }
 
 resource "aws_secretsmanager_secret_version" "rds_postgres" {
-  secret_id = aws_secretsmanager_secret.rds_postgres.id
+  count     = var.enable_postgres_and_debezium ? 1 : 0
+  secret_id = aws_secretsmanager_secret.rds_postgres[0].id
   secret_string = jsonencode({
-    host     = aws_db_instance.postgres.address
-    port     = aws_db_instance.postgres.port
+    host     = aws_db_instance.postgres[0].address
+    port     = aws_db_instance.postgres[0].port
     dbname   = var.db_name
     username = var.db_username
     password = var.db_password
-    endpoint = aws_db_instance.postgres.endpoint
+    endpoint = aws_db_instance.postgres[0].endpoint
   })
 }
 
@@ -83,12 +85,14 @@ resource "aws_iam_policy" "read_dvdrental_secrets" {
           "secretsmanager:GetSecretValue",
           "secretsmanager:DescribeSecret"
         ]
-        Resource = [
-          aws_secretsmanager_secret.kafka_bootstrap.arn,
-          aws_secretsmanager_secret.s3_config.arn,
-          aws_secretsmanager_secret.airflow_config.arn,
-          aws_secretsmanager_secret.rds_postgres.arn
-        ]
+        Resource = concat(
+          [
+            aws_secretsmanager_secret.kafka_bootstrap.arn,
+            aws_secretsmanager_secret.s3_config.arn,
+            aws_secretsmanager_secret.airflow_config.arn
+          ],
+          var.enable_postgres_and_debezium ? [aws_secretsmanager_secret.rds_postgres[0].arn] : []
+        )
       }
     ]
   })
@@ -123,5 +127,5 @@ output "secret_airflow_arn" {
 }
 
 output "secret_rds_arn" {
-  value = aws_secretsmanager_secret.rds_postgres.arn
+  value = var.enable_postgres_and_debezium ? aws_secretsmanager_secret.rds_postgres[0].arn : null
 }

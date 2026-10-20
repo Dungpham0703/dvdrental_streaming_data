@@ -177,7 +177,7 @@ resource "aws_instance" "kafka" {
   iam_instance_profile   = aws_iam_instance_profile.kafka_profile.name
 
   root_block_device {
-    volume_size           = 30
+    volume_size           = 100
     volume_type           = "gp3"
     delete_on_termination = true
   }
@@ -240,7 +240,7 @@ resource "aws_instance" "spark_master" {
   iam_instance_profile   = aws_iam_instance_profile.spark_profile.name
 
   root_block_device {
-    volume_size           = 30
+    volume_size           = 100
     volume_type           = "gp3"
     delete_on_termination = true
   }
@@ -293,7 +293,7 @@ resource "aws_instance" "spark_worker" {
   iam_instance_profile   = aws_iam_instance_profile.spark_profile.name
 
   root_block_device {
-    volume_size           = 30
+    volume_size           = 100
     volume_type           = "gp3"
     delete_on_termination = true
   }
@@ -394,7 +394,7 @@ resource "aws_instance" "producer" {
   iam_instance_profile   = aws_iam_instance_profile.producer_profile.name
 
   root_block_device {
-    volume_size           = 30
+    volume_size           = 100
     volume_type           = "gp3"
     delete_on_termination = true
   }
@@ -421,22 +421,23 @@ usermod -aG docker ubuntu
 echo "[*] Installing Python libraries for Producer..."
 pip3 install boto3 kafka-python lz4 --break-system-packages || pip3 install boto3 kafka-python lz4
 
+%{if var.enable_postgres_and_debezium}
 # 1. Enforce REPLICA IDENTITY FULL on PostgreSQL RDS
 cat > /home/ubuntu/enforce_replica_identity.sh <<'SCRIPT_EOF'
 #!/bin/bash
 set -euo pipefail
-echo "[*] Waiting for PostgreSQL RDS (${aws_db_instance.postgres.address}:5432) to accept connections..."
+echo "[*] Waiting for PostgreSQL RDS (${length(aws_db_instance.postgres) > 0 ? aws_db_instance.postgres[0].address : ""}:5432) to accept connections..."
 export PGPASSWORD="${var.db_password}"
 MAX_RETRIES=45
 COUNT=0
-until psql -h "${aws_db_instance.postgres.address}" -p 5432 -U "${var.db_username}" -d "${var.db_name}" -c '\q' >/dev/null 2>&1 || [ $COUNT -eq $MAX_RETRIES ]; do
+until psql -h "${length(aws_db_instance.postgres) > 0 ? aws_db_instance.postgres[0].address : ""}" -p 5432 -U "${var.db_username}" -d "${var.db_name}" -c '\q' >/dev/null 2>&1 || [ $COUNT -eq $MAX_RETRIES ]; do
   echo "Waiting for RDS PostgreSQL to be ready ($COUNT/$MAX_RETRIES)..."
   sleep 10
   COUNT=$((COUNT+1))
 done
 
 echo "[*] Enforcing REPLICA IDENTITY FULL on transactional tables for Debezium CDC..."
-psql -h "${aws_db_instance.postgres.address}" -p 5432 -U "${var.db_username}" -d "${var.db_name}" <<'SQLEOF'
+psql -h "${length(aws_db_instance.postgres) > 0 ? aws_db_instance.postgres[0].address : ""}" -p 5432 -U "${var.db_username}" -d "${var.db_name}" <<'SQLEOF'
 DO $$
 DECLARE
   t text;
@@ -460,6 +461,7 @@ SCRIPT_EOF
 chmod +x /home/ubuntu/enforce_replica_identity.sh
 chown ubuntu:ubuntu /home/ubuntu/enforce_replica_identity.sh
 /home/ubuntu/enforce_replica_identity.sh || true
+%{endif}
 
 # 2. Clone repository first
 echo "[*] Cloning dvdrental repository..."
@@ -470,6 +472,7 @@ else
   cd "$APP_DIR" && git pull origin main
 fi
 
+%{if var.enable_postgres_and_debezium}
 # 3. Start Debezium Kafka Connect container
 echo "[*] Starting Debezium Kafka Connect container..."
 KAFKA_BROKERS="${join(",", [for inst in aws_instance.kafka : "${inst.private_ip}:9092"])}"
@@ -491,7 +494,7 @@ docker run -d \
   -e VALUE_CONVERTER_SCHEMAS_ENABLE=false \
   -e CONNECT_CONFIG_PROVIDERS=env \
   -e CONNECT_CONFIG_PROVIDERS_ENV_CLASS=org.apache.kafka.common.config.provider.EnvVarConfigProvider \
-  -e DB_HOST="${aws_db_instance.postgres.address}" \
+  -e DB_HOST="${length(aws_db_instance.postgres) > 0 ? aws_db_instance.postgres[0].address : ""}" \
   -e DB_USER="${var.db_username}" \
   -e DB_PASS="${var.db_password}" \
   -e DB_NAME="${var.db_name}" \
@@ -513,6 +516,7 @@ done
 echo "[*] Registering Debezium connectors via manage_connectors.py..."
 pip3 install requests urllib3 --break-system-packages || pip3 install requests urllib3
 python3 "$APP_DIR/infra/docker/debezium/manage_connectors.py" || true
+%{endif}
 
 # 5. Start Airflow
 echo "[*] Configuring Airflow environment..."
@@ -574,6 +578,7 @@ EOF
 # RDS — PostgreSQL with Logical Replication
 # -----------------------------------------------------------------------------
 resource "aws_db_parameter_group" "postgres_logical" {
+  count       = var.enable_postgres_and_debezium ? 1 : 0
   name        = "dvdrental-pg-logical-${random_id.bucket_suffix.hex}"
   family      = "postgres16"
   description = "Enable logical replication for Debezium CDC"
@@ -602,6 +607,7 @@ resource "aws_db_parameter_group" "postgres_logical" {
 }
 
 resource "aws_db_instance" "postgres" {
+  count             = var.enable_postgres_and_debezium ? 1 : 0
   identifier        = "dvdrental-postgres-${random_id.bucket_suffix.hex}"
   engine            = "postgres"
   engine_version    = "16"
@@ -615,7 +621,7 @@ resource "aws_db_instance" "postgres" {
 
   db_subnet_group_name   = aws_db_subnet_group.postgres.name
   vpc_security_group_ids = [aws_security_group.rds.id]
-  parameter_group_name   = aws_db_parameter_group.postgres_logical.name
+  parameter_group_name   = aws_db_parameter_group.postgres_logical[0].name
 
   publicly_accessible     = true
   skip_final_snapshot     = true
@@ -665,25 +671,25 @@ output "s3_bucket_name" {
 }
 
 output "postgres_endpoint" {
-  value = aws_db_instance.postgres.endpoint
+  value = var.enable_postgres_and_debezium ? aws_db_instance.postgres[0].endpoint : null
 }
 
 output "postgres_address" {
-  value = aws_db_instance.postgres.address
+  value = var.enable_postgres_and_debezium ? aws_db_instance.postgres[0].address : null
 }
 
 output "postgres_port" {
-  value = aws_db_instance.postgres.port
+  value = var.enable_postgres_and_debezium ? aws_db_instance.postgres[0].port : null
 }
 
 output "debezium_private_ip" {
-  value = aws_instance.producer.private_ip
+  value = var.enable_postgres_and_debezium ? aws_instance.producer.private_ip : null
 }
 
 output "debezium_public_ip" {
-  value = aws_instance.producer.public_ip
+  value = var.enable_postgres_and_debezium ? aws_instance.producer.public_ip : null
 }
 
 output "debezium_connect_api" {
-  value = "http://${aws_instance.producer.public_ip}:8083"
+  value = var.enable_postgres_and_debezium ? "http://${aws_instance.producer.public_ip}:8083" : null
 }
