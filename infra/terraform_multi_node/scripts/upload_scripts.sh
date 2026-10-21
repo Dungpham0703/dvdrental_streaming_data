@@ -4,7 +4,11 @@ set -e
 cd "$(dirname "$0")"
 
 cd ../terraform
-BUCKET=$(terraform output -raw s3_bucket_name)
+BUCKET=$(terraform output -raw s3_bucket_name 2>/dev/null || true)
+if [ -z "$BUCKET" ] || [ "$BUCKET" = "No outputs found" ]; then
+    BUCKET=$(grep 'existing_s3_bucket_name' terraform.tfvars 2>/dev/null | cut -d'=' -f2 | tr -d ' "' || echo "dvdrental-hudi-lake-dzung-2026")
+    BUCKET=${BUCKET:-"dvdrental-hudi-lake-dzung-2026"}
+fi
 cd - > /dev/null
 
 echo "[*] Uploading scripts to s3://${BUCKET}/scripts/"
