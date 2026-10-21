@@ -83,8 +83,10 @@ def get_aws_secret(
         return {}
 
 
-def get_public_ip_by_tag(name_tag: str, region_name: str = "ap-southeast-2") -> str:
-    """Discovers public IP of an EC2 instance by Name tag."""
+def get_instance_ip_by_tag(
+    name_tag: str, region_name: str = "ap-southeast-2", prefer_private: bool = True
+) -> str:
+    """Discovers IP of an EC2 instance by Name tag (prefers private IP for in-VPC calls)."""
     try:
         cfg = Config(connect_timeout=3, read_timeout=3, retries={"max_attempts": 1})
         ec2 = boto3.client("ec2", region_name=region_name, config=cfg)
@@ -96,12 +98,59 @@ def get_public_ip_by_tag(name_tag: str, region_name: str = "ap-southeast-2") -> 
         )
         for r in res.get("Reservations", []):
             for inst in r.get("Instances", []):
+                priv_ip = inst.get("PrivateIpAddress")
                 pub_ip = inst.get("PublicIpAddress")
+                if prefer_private and priv_ip:
+                    return priv_ip
                 if pub_ip:
                     return pub_ip
+                if priv_ip:
+                    return priv_ip
     except (botocore.exceptions.BotoCoreError, botocore.exceptions.ClientError):
         pass
     return ""
+
+
+def resolve_spark_master_ip(
+    cli_arg: str = "", region_name: str = "ap-southeast-2"
+) -> str:
+    """
+    Intelligently resolves Spark Master IP:
+    1. CLI argument (--spark-ip)
+    2. SPARK_MASTER_IP environment variable
+    3. EC2 tag discovery (prioritizing Private IP)
+    4. VPC cluster static private IP fallback (172.31.16.110 from terraform/main.tf)
+    """
+    if cli_arg:
+        return cli_arg.strip()
+
+    env_ip = os.environ.get("SPARK_MASTER_IP", "").strip()
+    if env_ip:
+        return env_ip
+
+    # Tag discovery (private IP preferred)
+    tagged_ip = get_instance_ip_by_tag(
+        "Spark-Master", region_name=region_name, prefer_private=True
+    )
+    if tagged_ip:
+        return tagged_ip
+
+    # Default VPC static IP for Spark Master (172.31.16.110)
+    default_vpc_ip = "172.31.16.110"
+    if check_broker_reachable(
+        f"{default_vpc_ip}:8080", timeout=0.8
+    ) or check_broker_reachable(f"{default_vpc_ip}:7077", timeout=0.8):
+        return default_vpc_ip
+
+    # If running on an EC2 instance in 172.31.x.x
+    try:
+        local_ip = socket.gethostbyname(socket.gethostname())
+        if local_ip.startswith("172.31."):
+            return default_vpc_ip
+    except OSError:
+        pass
+
+    return default_vpc_ip
 
 
 # =====================================================================
@@ -916,6 +965,12 @@ def main():
         help="S3 table base prefix override (e.g. bronze/default/)",
     )
     parser.add_argument(
+        "--spark-ip",
+        type=str,
+        default="",
+        help="Spark Master IP override (default: auto-detects private IP 172.31.16.110 in VPC)",
+    )
+    parser.add_argument(
         "--table",
         type=str,
         default="",
@@ -961,9 +1016,7 @@ def main():
             default_prefix = match.group(1).rstrip("/") + "/"
 
     s3_prefix = args.s3_prefix or default_prefix
-    spark_master_ip = get_public_ip_by_tag("Spark-Master") or os.environ.get(
-        "SPARK_MASTER_IP", ""
-    )
+    spark_master_ip = resolve_spark_master_ip(args.spark_ip)
     target_table = args.table.strip().lower() if args.table else None
 
     while True:

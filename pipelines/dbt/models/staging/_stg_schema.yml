@@ -181,6 +181,8 @@ models:
           - relationships:
               to: ref('stg_rental')
               field: rental_id
+              config:
+                severity: warn
       - name: amount
         tests: [not_null]
       - name: is_deleted

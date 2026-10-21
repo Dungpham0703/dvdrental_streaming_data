@@ -13,7 +13,8 @@ cd - > /dev/null
 
 echo "[*] Uploading scripts to s3://${BUCKET}/scripts/"
 aws s3 cp ../producer/producer.py              "s3://${BUCKET}/scripts/producer.py"
-aws s3 cp run_hudi_streamer_ec2.sh "s3://${BUCKET}/scripts/run_hudi_streamer_ec2.sh"
+aws s3 cp run_hudi_streamer_ec2.sh             "s3://${BUCKET}/scripts/run_hudi_streamer_ec2.sh"
+aws s3 cp ../../../scripts/ops/monitor_pipeline.py "s3://${BUCKET}/scripts/monitor_pipeline.py"
 
 echo "[*] Uploading 15 Hudi configs and schemas to S3..."
 if [ -d "../hudi_configs/" ]; then
