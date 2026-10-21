@@ -8,11 +8,15 @@
 set -e
 
 echo "[1/4] Installing Python dependencies..."
-sudo dnf install -y python3-pip
+sudo apt-get update -y && sudo apt-get install -y python3-pip || sudo dnf install -y python3-pip
 
 pip3 install \
     kafka-python \
-    boto3
+    boto3 \
+    tenacity \
+    python-dotenv \
+    lz4 \
+    --break-system-packages || pip3 install kafka-python boto3 tenacity python-dotenv lz4
 
 echo "[2/4] Fetching producer script from S3..."
 S3_BUCKET=$(aws secretsmanager get-secret-value \
@@ -23,7 +27,7 @@ S3_BUCKET=$(aws secretsmanager get-secret-value \
 aws s3 cp "s3://${S3_BUCKET}/scripts/producer.py" ~/producer.py
 
 echo "[3/4] Script ready! Execute with custom settings:"
-echo "  WORKERS=8 TARGET_MESSAGES=100000000 python3 ~/producer.py"
+echo "  python3 ~/producer.py --target-gb 5"
 echo ""
-echo "[4/4] Or run immediately with defaults (4 workers, 100M messages):"
+echo "[4/4] Or run with default settings (~5.2GB volume, 5M rentals):"
 echo "  python3 ~/producer.py"

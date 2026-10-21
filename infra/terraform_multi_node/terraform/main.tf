@@ -191,6 +191,7 @@ resource "aws_instance" "kafka" {
   private_ip             = cidrhost(aws_subnet.main.cidr_block, 100 + count.index)
   vpc_security_group_ids = [aws_security_group.allow_all_internal.id]
   iam_instance_profile   = aws_iam_instance_profile.kafka_profile.name
+  key_name               = var.key_name
 
   root_block_device {
     volume_size           = 100
@@ -254,6 +255,7 @@ resource "aws_instance" "spark_master" {
   private_ip             = cidrhost(aws_subnet.main.cidr_block, 110)
   vpc_security_group_ids = [aws_security_group.allow_all_internal.id]
   iam_instance_profile   = aws_iam_instance_profile.spark_profile.name
+  key_name               = var.key_name
 
   root_block_device {
     volume_size           = 100
@@ -307,6 +309,7 @@ resource "aws_instance" "spark_worker" {
   private_ip             = cidrhost(aws_subnet.main.cidr_block, 111 + count.index)
   vpc_security_group_ids = [aws_security_group.allow_all_internal.id]
   iam_instance_profile   = aws_iam_instance_profile.spark_profile.name
+  key_name               = var.key_name
 
   root_block_device {
     volume_size           = 100
@@ -408,6 +411,7 @@ resource "aws_instance" "producer" {
   private_ip             = cidrhost(aws_subnet.main.cidr_block, 120)
   vpc_security_group_ids = [aws_security_group.producer_airflow.id]
   iam_instance_profile   = aws_iam_instance_profile.producer_profile.name
+  key_name               = var.key_name
 
   root_block_device {
     volume_size           = 100
@@ -435,7 +439,7 @@ systemctl enable --now docker
 usermod -aG docker ubuntu
 
 echo "[*] Installing Python libraries for Producer..."
-pip3 install boto3 kafka-python lz4 --break-system-packages || pip3 install boto3 kafka-python lz4
+pip3 install boto3 kafka-python lz4 tenacity python-dotenv --break-system-packages || pip3 install boto3 kafka-python lz4 tenacity python-dotenv
 
 %{if var.enable_postgres_and_debezium}
 # 1. Enforce REPLICA IDENTITY FULL on PostgreSQL RDS
@@ -674,6 +678,11 @@ output "airflow_private_ip" {
 
 output "airflow_public_ip" {
   value = aws_instance.producer.public_ip
+}
+
+output "ssh_producer_command" {
+  description = "SSH command to connect to Producer / Airflow node"
+  value       = "ssh -i dvdrental-key.pem ubuntu@${aws_instance.producer.public_ip}"
 }
 
 output "airflow_web_ui" {

@@ -47,3 +47,9 @@ variable "enable_postgres_and_debezium" {
   type        = bool
   default     = false
 }
+
+variable "key_name" {
+  description = "EC2 Key Pair Name for SSH access"
+  type        = string
+  default     = "dvdrental-key"
+}
