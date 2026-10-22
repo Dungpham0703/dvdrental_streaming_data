@@ -46,7 +46,91 @@ To solve the analytical bottlenecks, the data was remodeled into a **Star Schema
 
 ## 3. Tool Selection & Distributed Architecture
 
-> 📖 **Detailed Architecture Document & Diagram Prompts:** See [docs/ARCHITECTURE_OVERVIEW.md](docs/ARCHITECTURE_OVERVIEW.md) for complete network topology, node IP mappings, and ready-to-copy prompts for AI diagram generators.
+```mermaid
+flowchart TB
+  subgraph SOURCE["1. SOURCE & CDC INGESTION LAYER"]
+    direction TB
+    RDS[("AWS RDS PostgreSQL 16<br/>(15 OLTP Tables)<br/>WAL Logical Replication")]
+    CTRL_NODE["Control Node (EC2)<br/>IP: 172.31.16.120"]
+    DEBEZIUM["Debezium Kafka Connect 2.7<br/>(Extract WAL / CDC Events)"]
+    PRODUCER["Traffic Generator / Producer<br/>(Stateful Synthetic CDC Load)"]
+    RDS -->|WAL Stream| DEBEZIUM
+    PRODUCER -->|Simulate Orders/Rentals| RDS
+    CTRL_NODE --- DEBEZIUM
+    CTRL_NODE --- PRODUCER
+  end
+
+  subgraph KAFKA_CLUSTER["2. DISTRIBUTED MESSAGE BROKER (KRaft - 3 Nodes)"]
+    direction LR
+    KAFKA1["Kafka Broker/Controller 1<br/>172.31.16.100:9092"]
+    KAFKA2["Kafka Broker/Controller 2<br/>172.31.16.101:9092"]
+    KAFKA3["Kafka Broker/Controller 3<br/>172.31.16.102:9092"]
+    KAFKA1 <-->|Quorum 9093| KAFKA2
+    KAFKA2 <-->|Quorum 9093| KAFKA3
+    KAFKA3 <-->|Quorum 9093| KAFKA1
+  end
+
+  DEBEZIUM -->|Publish CDC Topics<br/>Replication=3, Partitions=6| KAFKA_CLUSTER
+
+  subgraph SPARK_CLUSTER["3. DISTRIBUTED STREAM PROCESSING (Spark Standalone Cluster)"]
+    direction TB
+    MASTER["Spark Master Node<br/>172.31.16.110:7077<br/>Web UI: 8080"]
+    W1["Spark Worker 1<br/>172.31.16.111<br/>(2 Cores, 6GB)"]
+    W2["Spark Worker 2<br/>172.31.16.112<br/>(2 Cores, 6GB)"]
+    W3["Spark Worker 3<br/>172.31.16.113<br/>(2 Cores, 6GB)"]
+    MASTER --- W1
+    MASTER --- W2
+    MASTER --- W3
+    STREAMER["HoodieMultiTableStreamer<br/>(Apache Hudi 0.15 on Spark 3.5)"]
+    W1 -.-> STREAMER
+    W2 -.-> STREAMER
+    W3 -.-> STREAMER
+  end
+
+  KAFKA_CLUSTER -->|Parallel Consumer Streams| SPARK_CLUSTER
+
+  subgraph LAKEHOUSE["4. AWS S3 LAKEHOUSE STORAGE (dvd-rental-lakehouse)"]
+    direction TB
+    BRONZE["Bronze Layer (Raw CDC)<br/>Apache Hudi (Merge-On-Read - MOR)<br/>Continuous Upserts & Deletes"]
+    SILVER["Silver Layer (Cleansed/Staging)<br/>Apache Iceberg<br/>Deduplicated, CDC Tombstones Handled"]
+    GOLD["Gold Layer (Analytics Mart)<br/>Apache Iceberg (Star Schema)<br/>• fact_rental, fact_payment<br/>• dim_customer (SCD Type 2)<br/>• dim_film, dim_store_staff, dim_date"]
+
+    BRONZE -->|dbt transformation| SILVER
+    SILVER -->|dbt transformation| GOLD
+  end
+
+  STREAMER -->|Direct S3 Writes via VPC Endpoint| BRONZE
+
+  subgraph ORCHESTRATION["5. ORCHESTRATION & TRANSFORMATION"]
+    AIRFLOW["Apache Airflow 2.x<br/>(Running on Control Node)"]
+    DBT["dbt (Data Build Tool)<br/>dbt-athena-adapter"]
+    AIRFLOW -->|Cron */15 min<br/>Trigger & Monitor| DBT
+    DBT -->|Execute SQL| ATHENA
+  end
+
+  subgraph QUERY_CATALOG["6. CATALOG & SERVERLESS QUERY ENGINE"]
+    GLUE["AWS Glue Data Catalog<br/>(Schema Discovery & Partitions)"]
+    ATHENA["AWS Athena (Trino/Presto Engine)<br/>Serverless Interactive SQL Queries"]
+    GLUE --- ATHENA
+    ATHENA <-->|Read / Write Metadata & Tables| LAKEHOUSE
+  end
+
+  subgraph SERVING["7. DATA SERVING & CONSUMPTION LAYER"]
+    direction LR
+    subgraph BI["BI Analytics"]
+      METABASE["Metabase BI Engine<br/>4 Automated Dashboards:<br/>1. Revenue & Payment<br/>2. Rental Operations<br/>3. Customer Intelligence<br/>4. Film Inventory"]
+    end
+    subgraph GENAI["GenAI Chat-with-Data"]
+      NEXTJS["Frontend AI Dashboard<br/>(Next.js + Tailwind CSS)"]
+      AGENT["FastAPI AI Agent Backend<br/>(Google Gemini Pro)"]
+      USER(["Business Users"])
+      USER <-->|Natural Language Prompt| NEXTJS
+      NEXTJS <-->|REST API| AGENT
+      AGENT -->|Text-to-SQL| ATHENA
+    end
+    ATHENA -->|SQL Results| METABASE
+  end
+```
 
 The lakehouse is deployed as a **Distributed Multi-Node Architecture** on AWS via Terraform:
 
@@ -96,8 +180,9 @@ dvdrental_streaming_data/
 │   │   ├── kafka/                # Zookeeper & Apache Kafka broker
 │   │   ├── debezium/             # Debezium PostgreSQL CDC connector
 │   │   └── metabase/             # Metabase BI container & dashboard exports
-│   └── terraform_multi_node/     # AWS EC2 multi-node cluster provisioning
+│   └── terraform_multi_node/     # AWS EC2 multi-node cluster provisioning (VPC, Kafka, Spark, RDS)
 ├── scripts/                      # Operational utilities & automation
+│   ├── ops/                      # Lakehouse observability dashboard, offset/lag & WAL monitoring
 │   ├── benchmark/                # Stress-testing & synthetic load generators
 │   ├── setup/                    # WSL2 & local development bootstrap scripts
 │   └── experiments/              # PySpark, DuckDB exploration & scratch scripts
@@ -152,3 +237,92 @@ The repository uses **GitHub Actions** for automated testing, dbt validation, an
 - **Continuous Deployment (`.github/workflows/cd.yml`)**:
   - **Airflow Container Build**: Builds and pushes production Docker images for Airflow (`pipelines/airflow`) to **GitHub Container Registry (GHCR)** on pushes to `main`/`master` or version tags (`v*`).
   - **DAG Artifact Packaging**: Bundles Airflow DAGs into release artifacts for automated deployment to production orchestration environments.
+
+## 10. Data Quality & Integrity Engineering
+
+Data quality in this lakehouse is not treated as a post-hoc cleanup step, but enforced as **continuous quality gates** across each tier of the Medallion architecture:
+
+```text
+┌─────────────────────────┐     ┌─────────────────────────┐     ┌─────────────────────────┐
+│     CDC Source Gate     │ ──► │   Bronze / Hudi Gate    │ ──► │  Silver / Gold dbt Gate │
+├─────────────────────────┤     ├─────────────────────────┤     ├─────────────────────────┤
+│ • REPLICA IDENTITY FULL │     │ • Record Key Uniqueness │     │ • PK & Grain Validation │
+│ • Dual-Envelope JSON    │     │ • Deterministic Merging │     │ • Referential Integrity │
+│ • Schema Evolution      │     │ • Tombstone Filtering   │     │ • SCD Type 2 Intervals  │
+└─────────────────────────┘     └─────────────────────────┘     └─────────────────────────┘
+```
+
+### 1. Ingestion & CDC Quality Gates
+- **`REPLICA IDENTITY FULL` on PostgreSQL:** Guarantees that every UPDATE and DELETE transaction log emitted by Debezium contains both the full `before` and `after` row states. This prevents null join failures during downstream tombstone processing.
+- **Deterministic Deduplication in Hudi:** Hudi's `DefaultHoodieRecordPayload` uses the Debezium event timestamp (`ts_ms`) and `_hoodie_commit_time` to deterministically resolve out-of-order Kafka message deliveries during Merge-On-Read compaction.
+
+### 2. Transformation & Modeling Quality Gates (dbt Tests)
+- **Granularity & Uniqueness:** Automated dbt assertions (`unique`, `not_null`) test every surrogate key (`rental_key`, `payment_key`, `customer_key`, `date_key`) to guarantee the primary grain is never compromised by duplicate CDC events.
+- **Referential Integrity & Relationships:** Cross-model foreign key tests (`relationships`) ensure that 100% of transaction events in `fact_rental` and `fact_payment` resolve to valid records in `dim_customer`, `dim_film`, and `dim_store_staff`.
+- **Semantic & Business Invariants:**
+  - Positive monetary values: `amount >= 0.00`.
+  - Temporal consistency: `rental_date <= return_date` (with null-safe handling for active rentals).
+- **SCD Type 2 Correctness:**
+  - **Strict Windowing:** `valid_from < valid_to` on all closed historical dimension rows.
+  - **Single Active Version:** Exactly one active record (`is_current = true` and `valid_to IS NULL`) exists per natural business key (`customer_id`).
+
+---
+
+## 11. End-to-End Data Observability & Monitoring
+
+The repository includes a dedicated, production-grade observability dashboard in [scripts/ops/monitor_pipeline.py](scripts/ops/monitor_pipeline.py) that monitors real-time streaming health across four operational pillars:
+
+```bash
+# Real-time multi-node observability dashboard with live auto-refresh (5s interval)
+python3 scripts/ops/monitor_pipeline.py --watch 5
+
+# Deep-dive inspection into specific CDC topic and consumer lag
+python3 scripts/ops/monitor_pipeline.py --table rental
+```
+
+### 1. Kafka Stream & Consumer Lag Observability
+- **Partition Offset Auditing:** Tracks Log Start Offset (LSO) and Log End Offset (LEO / High Watermark) across all **6 partitions** for each of the 15 CDC topics.
+- **Consumer Group Lag:** Automatically computes per-partition consumer lag for Spark and Hudi consumer groups, pinpointing slow consumers or partition skew before it causes backlog spills.
+
+### 2. Hudi Lakehouse Timeline & Freshness Metrics
+- **Instant Timeline Inspection:** Connects directly to S3 via S3 VPC Gateway Endpoint to read `.hoodie/` timeline metadata.
+- **Ingestion Lag Tracking:** Computes real-time data freshness by calculating the delta between the latest Hudi deltacommit timestamp and current UTC wall-clock time.
+- **Compaction & Clean Auditing:** Monitors active table compaction states and cleaning metadata to ensure optimal Parquet file sizing.
+
+### 3. Spark Cluster Health & Resource Tracking
+- **Cluster Capacity:** Probes Spark Master REST API (`/json`) to report active worker counts (`ALIVE`/`DEAD`), assigned vs. available CPU cores, and allocated worker memory.
+- **Streaming Job Status:** Continuously tracks streaming application states (`RUNNING`, `FINISHED`, `KILLED`) and driver event loops.
+
+### 4. Operational Alerting & Failure Handling
+- **Slack Webhook Integration:** Apache Airflow tasks are bound to failure callbacks that automatically deliver structured Slack alerts containing DAG IDs, task run timestamps, exception traces, and direct links to Airflow logs.
+
+---
+
+## 12. Defensive Python & Resilient Engineering Practices
+
+All Python services in the repository (including the high-throughput CDC generator [producer.py](infra/terraform_multi_node/producer/producer.py) and monitoring suite [monitor_pipeline.py](scripts/ops/monitor_pipeline.py)) strictly adhere to **Defensive Programming Principles**:
+
+### 1. Fast Timeouts & Non-Blocking Network Probes
+- **TCP Reachability Probes:** Before invoking heavyweight SDK clients (Boto3, KafkaConsumer), lightweight socket checks (`socket.create_connection((host, port), timeout=0.5)`) verify network path accessibility.
+- **Strict Boto3 Timeouts:** AWS API clients are explicitly initialized with bounded connect/read timeouts to prevent threads from hanging indefinitely during AWS network degradation:
+  ```python
+  cfg = Config(connect_timeout=3, read_timeout=3, retries={"max_attempts": 1})
+  s3 = boto3.client("s3", region_name=region_name, config=cfg)
+  ```
+
+### 2. Bounded Memory Footprint (<50MB RAM)
+- **Ring-Buffer Pools:** The synthetic generator uses fixed-size deques (`collections.deque(maxlen=100_000)`) to maintain active unreturned rentals. This guarantees a flat, deterministic memory footprint (<50MB RAM) even when streaming **5,000,000+ CDC transactions**.
+
+### 3. Multi-Tier Dynamic Discovery with Graceful Fallbacks
+Services dynamically discover broker endpoints and cluster topology through a resilient fallback hierarchy that prevents crashes across diverse development and cloud environments:
+$$\text{CLI Flags} \longrightarrow \text{Environment Variables} \longrightarrow \text{AWS Secrets Manager} \longrightarrow \text{EC2 Tag Discovery} \longrightarrow \text{Static VPC IP Fallback}$$
+
+### 4. Stateful Idempotency & Checkpointing
+- **Zero ID Collisions:** The generator maintains state persistence across runs via a local state file (`~/.dvdrental_producer_state.json`) backed up to S3 (`s3://${BUCKET}/metadata/producer_state.json`).
+- Subsequent streaming runs resume from the exact high-watermark IDs (`last_rental_id`, `last_payment_id`), ensuring 100% idempotent data generation without primary key collision.
+
+### 5. Explicit Exception Hierarchies
+- **No Broad `except:` Swallowing:** Code catches precise exceptions (`botocore.exceptions.ClientError`, `KafkaError`, `urllib.error.URLError`, `json.JSONDecodeError`). Unrecoverable corruptions fail fast and log actionable diagnostic context rather than silently continuing with bad data.
+
+### 6. Safe Buffer Flushing & Resource Cleanup
+- Production batching configurations (`linger_ms=20`, `batch_size=65536`, `compression_type='lz4'`) are guarded with explicit `producer.flush()` and `producer.close()` calls inside `try...finally` blocks to guarantee zero message loss upon SIGINT/SIGTERM signals.
