@@ -83,3 +83,5 @@ override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
+pyspark_mastery_challenges.md
+pyspark_mastery_challenges.html

@@ -44,28 +44,34 @@ To solve the analytical bottlenecks, the data was remodeled into a **Star Schema
 - **Slowly Changing Dimensions (SCD Type 2):** Applied to dimensions like `dim_customer` to preserve a complete history of changes (using `valid_from`, `valid_to`, `is_current`). This ensures accurate time-travel reporting and prevents historical data loss.
 - **Fact & Dimension Tables:** Complex multi-table joins are simplified into centralized Fact tables (`fact_rental`, `fact_payment`) surrounded by descriptive Dimensions, making analytics straightforward and performant.
 
-## 3. Tool Selection & Architecture
+## 3. Tool Selection & Distributed Architecture
 
-- **Debezium & Kafka:** Enables zero-impact Change Data Capture (CDC). It streams database changes asynchronously directly from transaction logs (WAL), avoiding heavy polling queries on the source DB.
-- **Apache Hudi (Raw Layer):** Chosen for the Bronze (Raw) layer. Hudi's Merge-On-Read (MOR) format is highly optimized for continuous, low-latency streaming updates and upserts directly from Kafka.
+> 📖 **Detailed Architecture Document & Diagram Prompts:** See [docs/ARCHITECTURE_OVERVIEW.md](docs/ARCHITECTURE_OVERVIEW.md) for complete network topology, node IP mappings, and ready-to-copy prompts for AI diagram generators.
+
+The lakehouse is deployed as a **Distributed Multi-Node Architecture** on AWS via Terraform:
+
+- **Source & CDC Layer:** **AWS RDS PostgreSQL 16** with Write-Ahead Logging (WAL) and `REPLICA IDENTITY FULL`. **Debezium Kafka Connect 2.7** runs on a dedicated Control Node (`172.31.16.120`) alongside the Traffic Producer to extract zero-impact CDC streams without locking source tables.
+- **Distributed Message Broker (KRaft 3-Node Cluster):** **Apache Kafka 3.5.1** runs on 3 independent EC2 nodes (`172.31.16.100`, `172.31.16.101`, `172.31.16.102`) in KRaft consensus mode (no Zookeeper). Configured with **Replication Factor = 3**, `min.insync.replicas = 2`, and **6 partitions** per CDC topic for high availability and throughput.
+- **Distributed Stream Processing (Spark 1 Master + 3 Workers):** **Apache Spark 3.5.0 Standalone Cluster** (1 Master at `172.31.16.110:7077` and 3 Workers with 6 cores / 18 GB aggregate RAM). Runs `HoodieMultiTableStreamer` to continuously consume streams across Kafka brokers and write into the Bronze layer in parallel.
+- **Apache Hudi (Bronze/Raw Layer):** Stores raw CDC data as Hudi Merge-On-Read (MOR) tables in AWS S3 (`dvd-rental-lakehouse`) via high-speed S3 VPC Gateway Endpoint, enabling ultra-low-latency upserts and deletes.
   ![Raw Data with Hudi Format](docs/images/raw_data_with_hudi_format.png)
-- **Apache Iceberg (Staging/Mart Layers):** Chosen for Silver (Staging) and Gold (Mart) layers. Iceberg excels at large-scale OLAP analytical queries, schema evolution, and time-travel querying. It integrates seamlessly with dbt and AWS Athena for high-performance reading.
+- **Apache Iceberg (Silver/Staging & Gold/Mart Layers):** Chosen for Silver and Gold layers. Iceberg delivers high-performance OLAP queries, schema evolution, and time-travel querying. It integrates seamlessly with dbt and AWS Athena for analytical reads.
   ![Staging Data with Iceberg Format](docs/images/staging_data_with_iceberg_format.png)
   ![Mart Data with Iceberg Format](docs/images/mart_data_with_iceberg_format.png)
-- **dbt (Data Build Tool):** Manages the transformation logic (SQL) from Raw to Staging to Mart. It handles complex SCD Type 2 logic, incremental CDC processing, and automated data quality testing.
+- **dbt (Data Build Tool):** Manages SQL transformations from Raw Hudi to Staging Iceberg to Mart Star Schema. Handles complex SCD Type 2 logic, deduplication, incremental CDC processing, and automated data quality testing.
   ![dbt Lineage Graph](docs/images/dbt_linage_graph_model.png)
-- **Apache Airflow (Orchestration):** Orchestrates and automates the dbt transformation workflow end-to-end. Runs on a 15-minute cron schedule (`*/15 * * * *`), automatically executing `dbt deps` -> `dbt run` -> `dbt test` to ensure fresh, validated data in the Gold layer.
-- **AWS Athena & Glue:** Provides serverless data cataloging and querying. Glue organizes the tables, making the S3 data instantly queryable via standard SQL in Athena.
+- **Apache Airflow (Orchestration):** Orchestrates dbt workflows on the Control Node. Runs on a 15-minute cron schedule (`*/15 * * * *`), automatically executing `dbt deps` -> `dbt run` -> `dbt test` with Slack alerts and AWS Secrets Manager integration.
+- **AWS Athena & Glue Data Catalog:** Provides serverless cataloging and querying across S3 Iceberg tables without requiring persistent compute clusters.
   ![Databases on AWS Glue](docs/images/databases_on_aws_glue.png)
 
 ## 4. Implementation Steps
 
-1. **CDC Ingestion:** Debezium connects to PostgreSQL, captures row-level changes, and publishes them to Kafka topics.
-2. **Raw/Bronze Layer:** Hudi Streamer consumes the Kafka topics and writes raw CDC events as Hudi MOR tables to AWS S3.
-3. **Staging/Silver Layer:** dbt reads the Hudi tables, deduplicates records, handles tombstone deletes, and writes cleansed data into Iceberg tables.
-4. **Data Mart/Gold Layer:** dbt transforms the Staging data into the final Star Schema (Facts and SCD Type 2 Dimensions) using Iceberg format, optimized for BI consumption.
-5. **Orchestration with Airflow:** Apache Airflow triggers the dbt pipeline every 15 minutes (`dbt deps` -> `dbt run` -> `dbt test`) to maintain near real-time data freshness with automatic data quality verification.
-6. **Analytics & BI:** AWS Athena queries the Iceberg Data Marts to power real-time dashboards in BI tools like Metabase or QuickSight.
+1. **CDC Ingestion:** Debezium connects to RDS PostgreSQL WAL, captures row-level transactional changes, and publishes them into the distributed 3-node Kafka cluster.
+2. **Distributed Streaming to Raw/Bronze Layer:** The Spark Standalone Cluster (Master + 3 Workers) runs `HoodieMultiTableStreamer` to continuously ingest multi-table CDC events from Kafka into S3 as Hudi MOR tables.
+3. **Staging/Silver Layer:** dbt (executed via Athena) reads raw Hudi tables, deduplicates records, handles tombstone deletes (`_hoodie_is_deleted`), and writes clean records into Apache Iceberg tables.
+4. **Data Mart/Gold Layer:** dbt models the Silver data into the final Star Schema (central Facts and SCD Type 2 Dimensions) using Iceberg format, optimized for high-speed analytical scans.
+5. **Orchestration with Airflow:** Apache Airflow triggers the dbt pipeline every 15 minutes (`dbt deps` -> `dbt run` -> `dbt test`) to maintain freshness with automated data quality gates.
+6. **Analytics & BI Serving:** AWS Athena powers Metabase BI dashboards and the GenAI Text-to-SQL Agent (Google Gemini Pro + Next.js UI) for business reporting.
 
 ## 5. Performance Review
 

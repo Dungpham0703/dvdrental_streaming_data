@@ -53,3 +53,15 @@ variable "key_name" {
   type        = string
   default     = "dvdrental-key"
 }
+
+variable "existing_s3_bucket_name" {
+  description = "Existing S3 Bucket Name for Raw Data"
+  type        = string
+  default     = "dvd-rental-lakehouse"
+}
+
+variable "instance_type_cluster" {
+  description = "Instance type for all nodes"
+  type        = string
+  default     = "m7i-flex.large"
+}

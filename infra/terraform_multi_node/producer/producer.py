@@ -271,6 +271,7 @@ def make_debezium_envelope(
     before_data: Optional[Dict[str, Any]] = None,
     op: str = "c",
     connector_name: str = "dvdrental_source",
+    event_ts_ms: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     Constructs a dual-compatible CDC envelope for INSERT, UPDATE, or DELETE:
@@ -280,7 +281,7 @@ def make_debezium_envelope(
        - op == 'u': before=old,  after=new,    __op='u', __deleted='false'
        - op == 'd': before=old,  after=None,   __op='d', __deleted='true'
     """
-    now_ms = int(time.time() * 1000)
+    now_ms = event_ts_ms if event_ts_ms is not None else int(time.time() * 1000)
     envelope = {
         "before": before_data,
         "after": after_data,
@@ -334,6 +335,7 @@ def stream_bulk_data(
     num_staffs: int = 50,
     num_actors: int = 300,
     num_rentals: int = 5000000,
+    days_span: int = 30,
     insert_pct: int = 70,
     update_pct: int = 20,
     delete_pct: int = 10,
@@ -397,6 +399,19 @@ def stream_bulk_data(
     print(f"  [+] Starting payment_id: #{start_payment_id:,} (Baseline: {BASE_START_ID:,})")
     print(f"  [+] Active Pool Scale:   {total_customers:,} customers | {total_inventories:,} inventories")
 
+    # Chronological streaming timeline window
+    now_wall_micros = int(time.time() * 1_000_000)
+    day_micros = 86400 * 1_000_000
+    total_micros_span = max(1, days_span) * day_micros
+    sim_end_micros = now_wall_micros
+    sim_start_micros = sim_end_micros - total_micros_span
+
+    start_dt_str = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime(sim_start_micros / 1_000_000))
+    end_dt_str = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime(sim_end_micros / 1_000_000))
+    est_per_day = int(num_rentals / max(1, days_span))
+    print(f"  Streaming Time Span:   {start_dt_str} -> {end_dt_str} ({days_span} days)")
+    print(f"  Partition Density:     ~{est_per_day:,} rentals/day across {days_span} daily partitions")
+
     est_total_msgs = int(num_rentals * 1.95)
     est_gb = (est_total_msgs * 580) / (1024 ** 3)
     print(f"  Planned Scale:         {num_rentals:,} transaction rounds (~{est_total_msgs:,} CDC messages, ~{est_gb:.2f} GB)")
@@ -421,17 +436,24 @@ def stream_bulk_data(
         after_data: Optional[Dict[str, Any]] = None,
         before_data: Optional[Dict[str, Any]] = None,
         op: str = "c",
+        event_ts_ms: Optional[int] = None,
     ):
         nonlocal counts
         topic = f"{topic_prefix}.{table}"
         key_data = after_data if after_data is not None else before_data
         key = get_kafka_key(table, key_data) if key_data else None
-        envelope = make_debezium_envelope(table, after_data=after_data, before_data=before_data, op=op)
+        envelope = make_debezium_envelope(
+            table,
+            after_data=after_data,
+            before_data=before_data,
+            op=op,
+            event_ts_ms=event_ts_ms,
+        )
         producer.send(topic, key=key, value=envelope)
         counts[op] += 1
         counts["total"] += 1
 
-    base_micros = int(time.time() * 1_000_000)
+    base_micros = sim_start_micros
 
     # ==========================================================================
     # PHASES 1 to 5: DIMENSIONS (Skipped by default because Run #1 baseline is assumed)
@@ -605,22 +627,20 @@ def stream_bulk_data(
     curr_rental_id = start_rental_id
     curr_payment_id = start_payment_id
 
-    day_micros = 86400 * 1_000_000
-    micros_span = 90 * day_micros
-
     # Ring buffer of active unreturned rentals for UPDATE ('u') and DELETE ('d')
     # Bounded to 30,000 items -> ~5MB RAM usage
     active_rentals_pool: deque[Tuple[Dict[str, Any], Optional[Dict[str, Any]]]] = deque(maxlen=30000)
 
-    # Pre-seed pool with unreturned rentals from prior run so UPDATE ('u') and DELETE ('d')
+    # Pre-seed pool with unreturned rentals from prior days so UPDATE ('u') and DELETE ('d')
     # can execute immediately from round 1 with 100% referential integrity
     seed_start = max(1, start_rental_id - 1000)
     for rid in range(seed_start, start_rental_id):
         inv_id = ((rid - 1) % total_inventories) + 1
         cust_id = ((rid - 1) % total_customers) + 1
         staff_id = ((rid - 1) % num_staffs) + 1
-        rental_offset = (rid * 179) % micros_span
-        rental_ts = base_micros - rental_offset - day_micros
+        # Seeded rentals occurred 1 to 5 days before sim_start_micros
+        seed_days_ago = (((rid % 4) + 1) * day_micros) + ((rid % 3600) * 1_000_000)
+        rental_ts = sim_start_micros - seed_days_ago
         rental_rec = {
             "rental_id": rid,
             "rental_date": str(rental_ts),
@@ -636,13 +656,19 @@ def stream_bulk_data(
             "staff_id": staff_id,
             "rental_id": rid,
             "amount": "2.99",
-            "payment_date": str(rental_ts + 60_000_000),
-            "last_update": str(rental_ts + 60_000_000),
+            "payment_date": str(rental_ts + 30_000_000),
+            "last_update": str(rental_ts + 30_000_000),
         }
         active_rentals_pool.append((rental_rec, pay_rec))
 
     for round_idx in range(1, num_rentals + 1):
-        now_ts = int(time.time() * 1_000_000)
+        # Monotonically advancing streaming clock from sim_start_micros -> sim_end_micros
+        progress = (round_idx - 1) / max(1, num_rentals)
+        base_sim_ts = sim_start_micros + int(progress * total_micros_span)
+        # Realistic subtle intra-minute jitter (+/- 15 seconds)
+        jitter = random.randint(-15, 15) * 1_000_000
+        current_sim_ts = min(max(base_sim_ts + jitter, sim_start_micros), sim_end_micros)
+        current_ts_ms = int(current_sim_ts / 1000)
 
         # Roll operation type
         roll = random.randint(1, 100)
@@ -653,10 +679,10 @@ def stream_bulk_data(
         if roll <= update_pct and active_rentals_pool:
             old_rental, associated_payment = active_rentals_pool.popleft()
             updated_rental = dict(old_rental)
-            updated_rental["return_date"] = str(now_ts)
-            updated_rental["last_update"] = str(now_ts)
+            updated_rental["return_date"] = str(current_sim_ts)
+            updated_rental["last_update"] = str(current_sim_ts)
 
-            emit_event("rental", after_data=updated_rental, before_data=old_rental, op="u")
+            emit_event("rental", after_data=updated_rental, before_data=old_rental, op="u", event_ts_ms=current_ts_ms)
 
         # ----------------------------------------------------------------------
         # ACTION 2: DELETE ('d') - Voided / refunded transaction
@@ -666,10 +692,10 @@ def stream_bulk_data(
 
             # Soft delete payment first
             if associated_payment:
-                emit_event("payment", after_data=None, before_data=associated_payment, op="d")
+                emit_event("payment", after_data=None, before_data=associated_payment, op="d", event_ts_ms=current_ts_ms)
 
             # Soft delete rental
-            emit_event("rental", after_data=None, before_data=old_rental, op="d")
+            emit_event("rental", after_data=None, before_data=old_rental, op="d", event_ts_ms=current_ts_ms)
 
         # ----------------------------------------------------------------------
         # ACTION 3: INSERT ('c') - New rental + payment transaction
@@ -682,16 +708,17 @@ def stream_bulk_data(
             cust_id = ((rid - 1) % total_customers) + 1
             staff_id = ((rid - 1) % num_staffs) + 1
 
-            rental_offset = (rid * 179) % micros_span
-            rental_ts = base_micros - rental_offset
+            rental_ts = current_sim_ts
 
-            # 70% already returned, 30% currently active/unreturned
+            # ~70% already returned after 1 to 4 days, ~30% currently active/unreturned
             is_returned = random.random() < 0.70
+            return_ts = None
             if is_returned:
-                return_duration = (((rid % 6) + 1) * day_micros) + ((rid % 3600) * 1_000_000)
-                return_ts = str(rental_ts + return_duration)
-            else:
-                return_ts = None
+                return_duration = (((rid % 4) + 1) * day_micros) + (random.randint(60, 3600) * 1_000_000)
+                calc_return = rental_ts + return_duration
+                # If calculated return is within historical window, record it; otherwise still active!
+                if calc_return <= sim_end_micros:
+                    return_ts = str(calc_return)
 
             rental_record = {
                 "rental_id": rid,
@@ -700,16 +727,16 @@ def stream_bulk_data(
                 "customer_id": cust_id,
                 "return_date": return_ts,
                 "staff_id": staff_id,
-                "last_update": str(rental_ts),
+                "last_update": return_ts if return_ts else str(rental_ts),
             }
-            emit_event("rental", after_data=rental_record, op="c")
+            emit_event("rental", after_data=rental_record, op="c", event_ts_ms=current_ts_ms)
 
             # 95% of rentals have a synchronized payment record
             payment_record = None
             if (rid % 100) < 95:
                 pid = curr_payment_id
                 curr_payment_id += 1
-                payment_ts = rental_ts + (((rid % 3590) + 10) * 1_000_000)
+                payment_ts = min(rental_ts + (random.randint(5, 60) * 1_000_000), sim_end_micros)
                 amount_val = random.choice(["0.99", "1.99", "2.99", "3.99", "4.99", "6.99", "9.99"])
 
                 payment_record = {
@@ -721,19 +748,21 @@ def stream_bulk_data(
                     "payment_date": str(payment_ts),
                     "last_update": str(payment_ts),
                 }
-                emit_event("payment", after_data=payment_record, op="c")
+                emit_event("payment", after_data=payment_record, op="c", event_ts_ms=int(payment_ts / 1000))
 
             # If rental is currently unreturned, add to pool for future update/delete
             if return_ts is None:
                 active_rentals_pool.append((rental_record, payment_record))
 
-        # Periodic progress log
+        # Periodic progress log with real streaming timestamp
         if round_idx % 50000 == 0 or round_idx == num_rentals:
             elapsed = time.time() - start_tx_time
             rate = int(round_idx / max(0.1, elapsed))
             pct = (round_idx / num_rentals) * 100
+            sim_date_str = time.strftime("%Y-%m-%d %H:%M", time.gmtime(current_sim_ts / 1_000_000))
             print(
                 f"  [{pct:5.1f}%] Round {round_idx:,}/{num_rentals:,} | "
+                f"Sim Date: {sim_date_str} UTC | "
                 f"Ops: C:{counts['c']:,} U:{counts['u']:,} D:{counts['d']:,} | "
                 f"Throughput: {rate:,} rounds/sec"
             )
@@ -816,6 +845,12 @@ def main():
         type=int,
         default=10,
         help="Percentage of DELETE operations (default: 10%%)",
+    )
+    parser.add_argument(
+        "--days",
+        type=int,
+        default=30,
+        help="Number of chronological days to span for realistic partition distribution (default: 30 days)",
     )
     parser.add_argument(
         "--start-rental-id",
@@ -903,6 +938,7 @@ def main():
         num_staffs=args.staffs,
         num_actors=args.actors,
         num_rentals=num_rentals,
+        days_span=args.days,
         insert_pct=args.insert_pct,
         update_pct=args.update_pct,
         delete_pct=args.delete_pct,
