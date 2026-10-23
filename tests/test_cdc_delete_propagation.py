@@ -178,6 +178,15 @@ class TestCdcSoftDeleteModelStructure(unittest.TestCase):
         )
         self.assertIn("combined_rentals", content)
 
+    def test_fct_payment_self_healing_pattern(self) -> None:
+        content = self.fct_payment_model.read_text(encoding="utf-8")
+        self.assertIn("orphaned_payments", content)
+        self.assertIn("customer_key = '-1'", content)
+        self.assertIn(
+            "target.customer_key = \\'-1\\' and src.customer_key != \\'-1\\'", content
+        )
+        self.assertIn("combined_payments", content)
+
     def test_snap_customer_explicit_check_cols(self) -> None:
         snap_path = self.repo_root / "pipelines/dbt/snapshots/snap_customer.sql"
         content = snap_path.read_text(encoding="utf-8")

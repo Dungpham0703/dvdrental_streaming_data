@@ -4,7 +4,7 @@
         incremental_strategy='merge',
         unique_key='payment_id',
         insert_condition='(src.is_deleted = false)',
-        update_condition='(src.cdc_capture_at > target.cdc_capture_at or (src.cdc_capture_at = target.cdc_capture_at and src.is_deleted = true))',
+        update_condition='(src.cdc_capture_at > target.cdc_capture_at or (src.cdc_capture_at = target.cdc_capture_at and src.is_deleted = true) or (target.customer_key = \'-1\' and src.customer_key != \'-1\'))',
         merge_update_columns_rules={
             'customer_key': 'case when src.is_deleted then _old_ else _new_ end',
             'customer_id': 'case when src.is_deleted then _old_ else _new_ end',
@@ -23,7 +23,7 @@
     )
 }}
 
-with payments as (
+with new_payments as (
     select * from {{ ref('stg_payment') }}
     {% if is_incremental() %}
     where cdc_capture_at >= (
@@ -32,6 +32,29 @@ with payments as (
     )
     {% endif %}
 ),
+
+{% if is_incremental() %}
+orphaned_payments as (
+    select s.*
+    from {{ ref('stg_payment') }} s
+    inner join (
+        select payment_id
+        from {{ this }}
+        where customer_key = '-1'
+          and is_deleted = false
+    ) o on s.payment_id = o.payment_id
+),
+
+combined_payments as (
+    select * from new_payments
+    union
+    select * from orphaned_payments
+),
+{% else %}
+combined_payments as (
+    select * from new_payments
+),
+{% endif %}
 
 rentals as (
     select * from {{ ref('stg_rental') }}
@@ -68,7 +91,7 @@ final as (
         cast(p.payment_date as date) as payment_date_day,
         p.cdc_capture_at,
         p.is_deleted
-    from payments p
+    from combined_payments p
     left join rentals r
         on p.rental_id = r.rental_id
     left join inventory i

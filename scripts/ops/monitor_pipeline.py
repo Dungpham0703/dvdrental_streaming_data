@@ -472,12 +472,13 @@ def get_hudi_lakehouse_metrics(
             tuple[str, str, str]
         ] = []  # (key, instant_str, type: deltacommit/commit)
         try:
-            res = s3.list_objects_v2(Bucket=s3_bucket, Prefix=hoodie_cand, MaxKeys=50)
-            for item in res.get("Contents", []):
-                key = item["Key"]
-                match = re.search(r"(\d{14,17})\.(deltacommit|commit)$", key)
-                if match:
-                    commit_keys.append((key, match.group(1), match.group(2)))
+            paginator = s3.get_paginator("list_objects_v2")
+            for page in paginator.paginate(Bucket=s3_bucket, Prefix=hoodie_cand):
+                for item in page.get("Contents", []):
+                    key = item["Key"]
+                    match = re.search(r"(\d{14,17})\.(deltacommit|commit)$", key)
+                    if match:
+                        commit_keys.append((key, match.group(1), match.group(2)))
         except (botocore.exceptions.BotoCoreError, botocore.exceptions.ClientError):
             pass
 
