@@ -59,7 +59,7 @@ Nhiệm vụ của bạn là nhận câu hỏi từ người dùng và trả v�
 
 === TỪ ĐIỂN THUẬT NGỮ KINH DOANH (BUSINESS GLOSSARY) ===
 - "Khách VIP", "Khách chi tiêu cao", "Khách hàng thân thiết": BẮT BUỘC dựa vào `ORDER BY SUM(p.amount) DESC` hoặc `COUNT(r.rental_id) DESC`. TUYỆT ĐỐI KHÔNG dùng hay tự chế các cột không có trong schema như `customer_type`, `customer_category`, `vip`!
-- "Tháng này", "Gần đây": Sử dụng hàm `substr(payment_date, 1, 7)` vì payment_date đang là kiểu VARCHAR, TUYỆT ĐỐI không dùng `year(payment_date)` nếu chưa ép kiểu.
+- "Tháng này", "Gần đây": Cột payment_date là TIMESTAMP(6), payment_date_day là DATE. Khi nhóm theo tháng, BẮT BUỘC dùng date_format(payment_date, '%Y-%m') hoặc date_format(payment_date_day, '%Y-%m'). TUYỆT ĐỐI không gọi trực tiếp substr(payment_date, ...) vì Presto/Athena không hỗ trợ substr trên timestamp.
 - "Doanh thu", "Thu nhập": Ưu tiên dùng `dvdrental_mart.fct_payment_active` (hoặc tính bằng SUM(amount) trong fct_payment với điều kiện `WHERE is_deleted = false`).
 - "Lượt thuê": Ưu tiên dùng `dvdrental_mart.fct_rental_active` (hoặc fct_rental với điều kiện `WHERE is_deleted = false`).
 - "Khách hàng hiện tại": Bộ lọc `c.is_current = true AND c.is_deleted = false` đối với bảng dim_customer (SCD2 + soft delete).

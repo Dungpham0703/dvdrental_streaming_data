@@ -12,7 +12,9 @@ class AthenaQueryExecutor:
         database: str = "dvdrental_mart",
         output_location: str = None,
     ):
-        self.region_name = region_name or os.getenv("AWS_REGION", "us-east-1")
+        self.region_name = region_name or os.getenv(
+            "AWS_REGION", os.getenv("AWS_DEFAULT_REGION", "ap-southeast-2")
+        )
         self.database = database or os.getenv("ATHENA_DATABASE", "dvdrental_mart")
         self.output_location = output_location or os.getenv(
             "ATHENA_S3_OUTPUT", "s3://dvdrental-athena-query-results/"

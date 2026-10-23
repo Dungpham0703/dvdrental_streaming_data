@@ -631,158 +631,177 @@ def stream_bulk_data(
     # Bounded to 30,000 items -> ~5MB RAM usage
     active_rentals_pool: deque[Tuple[Dict[str, Any], Optional[Dict[str, Any]]]] = deque(maxlen=30000)
 
-    # Pre-seed pool with unreturned rentals from prior days so UPDATE ('u') and DELETE ('d')
-    # can execute immediately from round 1 with 100% referential integrity
-    seed_start = max(1, start_rental_id - 1000)
-    for rid in range(seed_start, start_rental_id):
-        inv_id = ((rid - 1) % total_inventories) + 1
-        cust_id = ((rid - 1) % total_customers) + 1
-        staff_id = ((rid - 1) % num_staffs) + 1
-        # Seeded rentals occurred 1 to 5 days before sim_start_micros
-        seed_days_ago = (((rid % 4) + 1) * day_micros) + ((rid % 3600) * 1_000_000)
-        rental_ts = sim_start_micros - seed_days_ago
-        rental_rec = {
-            "rental_id": rid,
-            "rental_date": str(rental_ts),
-            "inventory_id": inv_id,
-            "customer_id": cust_id,
-            "return_date": None,
-            "staff_id": staff_id,
-            "last_update": str(rental_ts),
-        }
-        pay_rec = {
-            "payment_id": rid,
-            "customer_id": cust_id,
-            "staff_id": staff_id,
-            "rental_id": rid,
-            "amount": "2.99",
-            "payment_date": str(rental_ts + 30_000_000),
-            "last_update": str(rental_ts + 30_000_000),
-        }
-        active_rentals_pool.append((rental_rec, pay_rec))
-
-    for round_idx in range(1, num_rentals + 1):
-        # Monotonically advancing streaming clock from sim_start_micros -> sim_end_micros
-        progress = (round_idx - 1) / max(1, num_rentals)
-        base_sim_ts = sim_start_micros + int(progress * total_micros_span)
-        # Realistic subtle intra-minute jitter (+/- 15 seconds)
-        jitter = random.randint(-15, 15) * 1_000_000
-        current_sim_ts = min(max(base_sim_ts + jitter, sim_start_micros), sim_end_micros)
-        current_ts_ms = int(current_sim_ts / 1000)
-
-        # Roll operation type
-        roll = random.randint(1, 100)
-
-        # ----------------------------------------------------------------------
-        # ACTION 1: UPDATE ('u') - Customer returns a previously rented disc
-        # ----------------------------------------------------------------------
-        if roll <= update_pct and active_rentals_pool:
-            old_rental, associated_payment = active_rentals_pool.popleft()
-            updated_rental = dict(old_rental)
-            updated_rental["return_date"] = str(current_sim_ts)
-            updated_rental["last_update"] = str(current_sim_ts)
-
-            emit_event("rental", after_data=updated_rental, before_data=old_rental, op="u", event_ts_ms=current_ts_ms)
-
-        # ----------------------------------------------------------------------
-        # ACTION 2: DELETE ('d') - Voided / refunded transaction
-        # ----------------------------------------------------------------------
-        elif roll <= (update_pct + delete_pct) and active_rentals_pool:
-            old_rental, associated_payment = active_rentals_pool.pop()
-
-            # Soft delete payment first
-            if associated_payment:
-                emit_event("payment", after_data=None, before_data=associated_payment, op="d", event_ts_ms=current_ts_ms)
-
-            # Soft delete rental
-            emit_event("rental", after_data=None, before_data=old_rental, op="d", event_ts_ms=current_ts_ms)
-
-        # ----------------------------------------------------------------------
-        # ACTION 3: INSERT ('c') - New rental + payment transaction
-        # ----------------------------------------------------------------------
-        else:
-            rid = curr_rental_id
-            curr_rental_id += 1
-
+    # Pre-seed pool with unreturned rentals from prior days only if resuming from a previous run
+    # to guarantee 100% referential integrity and avoid phantom deletes on non-existent IDs
+    if is_resuming:
+        seed_start = max(1, start_rental_id - 1000)
+        for rid in range(seed_start, start_rental_id):
             inv_id = ((rid - 1) % total_inventories) + 1
             cust_id = ((rid - 1) % total_customers) + 1
             staff_id = ((rid - 1) % num_staffs) + 1
-
-            rental_ts = current_sim_ts
-
-            # ~70% already returned after 1 to 4 days, ~30% currently active/unreturned
-            is_returned = random.random() < 0.70
-            return_ts = None
-            if is_returned:
-                return_duration = (((rid % 4) + 1) * day_micros) + (random.randint(60, 3600) * 1_000_000)
-                calc_return = rental_ts + return_duration
-                # If calculated return is within historical window, record it; otherwise still active!
-                if calc_return <= sim_end_micros:
-                    return_ts = str(calc_return)
-
-            rental_record = {
+            # Seeded rentals occurred 1 to 5 days before sim_start_micros
+            seed_days_ago = (((rid % 4) + 1) * day_micros) + ((rid % 3600) * 1_000_000)
+            rental_ts = sim_start_micros - seed_days_ago
+            rental_rec = {
                 "rental_id": rid,
                 "rental_date": str(rental_ts),
                 "inventory_id": inv_id,
                 "customer_id": cust_id,
-                "return_date": return_ts,
+                "return_date": None,
                 "staff_id": staff_id,
-                "last_update": return_ts if return_ts else str(rental_ts),
+                "last_update": str(rental_ts),
             }
-            emit_event("rental", after_data=rental_record, op="c", event_ts_ms=current_ts_ms)
+            seed_pid = max(1, start_payment_id - (start_rental_id - rid))
+            pay_rec = {
+                "payment_id": seed_pid,
+                "customer_id": cust_id,
+                "staff_id": staff_id,
+                "rental_id": rid,
+                "amount": "2.99",
+                "payment_date": str(rental_ts + 30_000_000),
+                "last_update": str(rental_ts + 30_000_000),
+            }
+            active_rentals_pool.append((rental_rec, pay_rec))
 
-            # 95% of rentals have a synchronized payment record
-            payment_record = None
-            if (rid % 100) < 95:
-                pid = curr_payment_id
-                curr_payment_id += 1
-                payment_ts = min(rental_ts + (random.randint(5, 60) * 1_000_000), sim_end_micros)
-                amount_val = random.choice(["0.99", "1.99", "2.99", "3.99", "4.99", "6.99", "9.99"])
+    try:
+        for round_idx in range(1, num_rentals + 1):
+            # Monotonically advancing streaming clock from sim_start_micros -> sim_end_micros
+            progress = (round_idx - 1) / max(1, num_rentals)
+            base_sim_ts = sim_start_micros + int(progress * total_micros_span)
+            # Realistic subtle intra-minute jitter (+/- 15 seconds)
+            jitter = random.randint(-15, 15) * 1_000_000
+            current_sim_ts = min(max(base_sim_ts + jitter, sim_start_micros), sim_end_micros)
+            current_ts_ms = int(current_sim_ts / 1000)
 
-                payment_record = {
-                    "payment_id": pid,
-                    "customer_id": cust_id,
-                    "staff_id": staff_id,
+            # Roll operation type
+            roll = random.randint(1, 100)
+
+            # ----------------------------------------------------------------------
+            # ACTION 1: UPDATE ('u') - Customer returns a previously rented disc
+            # ----------------------------------------------------------------------
+            if roll <= update_pct and active_rentals_pool:
+                old_rental, associated_payment = active_rentals_pool.popleft()
+                updated_rental = dict(old_rental)
+                updated_rental["return_date"] = str(current_sim_ts)
+                updated_rental["last_update"] = str(current_sim_ts)
+
+                emit_event("rental", after_data=updated_rental, before_data=old_rental, op="u", event_ts_ms=current_ts_ms)
+
+            # ----------------------------------------------------------------------
+            # ACTION 2: DELETE ('d') - Voided / refunded transaction
+            # ----------------------------------------------------------------------
+            elif roll <= (update_pct + delete_pct) and active_rentals_pool:
+                old_rental, associated_payment = active_rentals_pool.pop()
+
+                # Soft delete payment first
+                if associated_payment:
+                    emit_event("payment", after_data=None, before_data=associated_payment, op="d", event_ts_ms=current_ts_ms)
+
+                # Soft delete rental
+                emit_event("rental", after_data=None, before_data=old_rental, op="d", event_ts_ms=current_ts_ms)
+
+            # ----------------------------------------------------------------------
+            # ACTION 3: INSERT ('c') - New rental + payment transaction
+            # ----------------------------------------------------------------------
+            else:
+                rid = curr_rental_id
+                curr_rental_id += 1
+
+                inv_id = ((rid - 1) % total_inventories) + 1
+                cust_id = ((rid - 1) % total_customers) + 1
+                staff_id = ((rid - 1) % num_staffs) + 1
+
+                rental_ts = current_sim_ts
+
+                # ~70% already returned after 1 to 4 days, ~30% currently active/unreturned
+                is_returned = random.random() < 0.70
+                return_ts = None
+                if is_returned:
+                    return_duration = (((rid % 4) + 1) * day_micros) + (random.randint(60, 3600) * 1_000_000)
+                    calc_return = rental_ts + return_duration
+                    # If calculated return is within historical window, record it; otherwise still active!
+                    if calc_return <= sim_end_micros:
+                        return_ts = str(calc_return)
+
+                rental_record = {
                     "rental_id": rid,
-                    "amount": amount_val,
-                    "payment_date": str(payment_ts),
-                    "last_update": str(payment_ts),
+                    "rental_date": str(rental_ts),
+                    "inventory_id": inv_id,
+                    "customer_id": cust_id,
+                    "return_date": return_ts,
+                    "staff_id": staff_id,
+                    "last_update": return_ts if return_ts else str(rental_ts),
                 }
-                emit_event("payment", after_data=payment_record, op="c", event_ts_ms=int(payment_ts / 1000))
+                emit_event("rental", after_data=rental_record, op="c", event_ts_ms=current_ts_ms)
 
-            # If rental is currently unreturned, add to pool for future update/delete
-            if return_ts is None:
-                active_rentals_pool.append((rental_record, payment_record))
+                # 95% of rentals have a synchronized payment record
+                payment_record = None
+                if (rid % 100) < 95:
+                    pid = curr_payment_id
+                    curr_payment_id += 1
+                    payment_ts = min(rental_ts + (random.randint(5, 60) * 1_000_000), sim_end_micros)
+                    amount_val = random.choice(["0.99", "1.99", "2.99", "3.99", "4.99", "6.99", "9.99"])
 
-        # Periodic progress log with real streaming timestamp
-        if round_idx % 50000 == 0 or round_idx == num_rentals:
-            elapsed = time.time() - start_tx_time
-            rate = int(round_idx / max(0.1, elapsed))
-            pct = (round_idx / num_rentals) * 100
-            sim_date_str = time.strftime("%Y-%m-%d %H:%M", time.gmtime(current_sim_ts / 1_000_000))
-            print(
-                f"  [{pct:5.1f}%] Round {round_idx:,}/{num_rentals:,} | "
-                f"Sim Date: {sim_date_str} UTC | "
-                f"Ops: C:{counts['c']:,} U:{counts['u']:,} D:{counts['d']:,} | "
-                f"Throughput: {rate:,} rounds/sec"
-            )
+                    payment_record = {
+                        "payment_id": pid,
+                        "customer_id": cust_id,
+                        "staff_id": staff_id,
+                        "rental_id": rid,
+                        "amount": amount_val,
+                        "payment_date": str(payment_ts),
+                        "last_update": str(payment_ts),
+                    }
+                    emit_event("payment", after_data=payment_record, op="c", event_ts_ms=int(payment_ts / 1000))
 
-    print("\n[*] Flushing producer buffers to Kafka brokers...")
-    flush_start = time.time()
-    producer.flush()
-    producer.close()
-    flush_elapsed = time.time() - flush_start
+                # If rental is currently unreturned, add to pool for future update/delete
+                if return_ts is None:
+                    active_rentals_pool.append((rental_record, payment_record))
 
-    # Persist updated state for the next run
-    updated_state = {
-        "last_rental_id": curr_rental_id - 1,
-        "last_payment_id": curr_payment_id - 1,
-        "total_inventories": total_inventories,
-        "total_customers": total_customers,
-        "total_films": num_films,
-        "updated_at": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()),
-    }
-    save_producer_state(state_file, updated_state, s3_bucket=s3_bucket)
+            # Periodic progress log with real streaming timestamp
+            if round_idx % 50000 == 0 or round_idx == num_rentals:
+                elapsed = time.time() - start_tx_time
+                rate = int(round_idx / max(0.1, elapsed))
+                pct = (round_idx / num_rentals) * 100
+                sim_date_str = time.strftime("%Y-%m-%d %H:%M", time.gmtime(current_sim_ts / 1_000_000))
+                print(
+                    f"  [{pct:5.1f}%] Round {round_idx:,}/{num_rentals:,} | "
+                    f"Sim Date: {sim_date_str} UTC | "
+                    f"Ops: C:{counts['c']:,} U:{counts['u']:,} D:{counts['d']:,} | "
+                    f"Throughput: {rate:,} rounds/sec"
+                )
+                # Periodic checkpointing so an interrupted job preserves watermark
+                save_producer_state(
+                    state_file,
+                    {
+                        "last_rental_id": curr_rental_id - 1,
+                        "last_payment_id": curr_payment_id - 1,
+                        "total_inventories": total_inventories,
+                        "total_customers": total_customers,
+                        "total_films": num_films,
+                        "updated_at": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()),
+                    },
+                    s3_bucket=s3_bucket,
+                )
+    finally:
+        print("\n[*] Flushing producer buffers to Kafka brokers...")
+        flush_start = time.time()
+        try:
+            producer.flush()
+            producer.close()
+        except Exception as e:
+            logger.warning(f"Error during producer flush/close: {e}")
+        flush_elapsed = time.time() - flush_start
+
+        # Persist updated state for the next run
+        updated_state = {
+            "last_rental_id": curr_rental_id - 1,
+            "last_payment_id": curr_payment_id - 1,
+            "total_inventories": total_inventories,
+            "total_customers": total_customers,
+            "total_films": num_films,
+            "updated_at": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()),
+        }
+        save_producer_state(state_file, updated_state, s3_bucket=s3_bucket)
 
     total_time = time.time() - start_tx_time
     print("=" * 82)
