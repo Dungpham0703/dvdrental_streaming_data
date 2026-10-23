@@ -33,7 +33,7 @@ default_args = {
 with DAG(
     "dbt_transform_dvdrental_dag",
     default_args=default_args,
-    description="Production Lakehouse dbt Pipeline: Freshness Gate -> Staging -> Snapshot SCD2 -> Mart -> Test",
+    description="Production Lakehouse dbt Pipeline: Freshness Gate -> Staging -> Snapshot SCD2 -> Intermediate -> Mart -> Test",
     schedule_interval="*/15 * * * *",
     start_date=datetime(2023, 1, 1),
     catchup=False,
@@ -59,9 +59,14 @@ with DAG(
         bash_command=f"dbt snapshot {common_flags}",
     )
 
+    dbt_run_intermediate = BashOperator(
+        task_id="dbt_run_intermediate",
+        bash_command=f"dbt run {common_flags} --select intermediate",
+    )
+
     dbt_run_mart = BashOperator(
         task_id="dbt_run_mart",
-        bash_command=f"dbt run {common_flags} --select +mart",
+        bash_command=f"dbt run {common_flags} --select mart",
     )
 
     dbt_test = BashOperator(
@@ -69,4 +74,11 @@ with DAG(
         bash_command=f"dbt test {common_flags}",
     )
 
-    dbt_check_freshness >> dbt_run_staging >> dbt_snapshot >> dbt_run_mart >> dbt_test
+    (
+        dbt_check_freshness
+        >> dbt_run_staging
+        >> dbt_snapshot
+        >> dbt_run_intermediate
+        >> dbt_run_mart
+        >> dbt_test
+    )
