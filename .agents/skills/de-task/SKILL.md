@@ -17,7 +17,7 @@ Do not edit files in this phase.
 3. Inspect only relevant files, configs, models, and tests; cite file paths and symbols as evidence.
 4. Separate confirmed facts from hypotheses.
 5. Identify data correctness risks: grain, keys, joins, nulls, duplicates, ordering, time zones, schema evolution, late data, reruns, and permissions as relevant.
-6. Propose the smallest safe approach, affected files, alternatives/trade-offs, tests, rollout/backfill considerations, and explicit non-goals.
+6. Propose the smallest safe approach, explicit list of affected files and files to be modified/created, alternatives/trade-offs, tests, rollout/backfill considerations, and explicit non-goals.
 7. Return a concise plan and STOP. Ask for explicit approval before editing.
 
 ## Phase 2 — Implement only after approval
@@ -38,6 +38,7 @@ Do not edit files in this phase.
 - Current data flow and evidence
 - Confirmed facts vs hypotheses
 - Candidate root cause or design options
+- Explicit list of affected files & files to be modified/created (with expected changes for each)
 - Minimal proposed plan by file/component
 - Tests and data-quality checks
 - Risks, assumptions, out-of-scope items
